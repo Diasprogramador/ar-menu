@@ -1,0 +1,7 @@
+# O cardapio publico deve ser indexado; o painel do restaurante, nunca.
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+
+Sitemap: /sitemap.xml

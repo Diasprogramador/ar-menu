@@ -1,0 +1,202 @@
+@import 'tailwindcss';
+
+/* ===========================================================================
+   AR Menu · sistema de design
+   ---------------------------------------------------------------------------
+   Direção: "brasa sobre papel". A superfície de leitura é papel quente quase
+   branco; a única cor saturada do produto é o gradiente de brasa, reservado
+   exclusivamente para a ação de AR. O painel administrativo usa o contraponto
+   petróleo, porque um dashboard laranja cansa em uso diário.
+
+   Separação por fio de 1px em vez de sombra: o cardápio é uma peça impressa,
+   não um app cheio de cartões flutuantes.
+   =========================================================================== */
+
+@theme {
+  --color-ink: #14110f;
+  --color-ink-soft: #2b2521;
+  --color-muted: #6b655e;
+  --color-faint: #97918a;
+  --color-paper: #fdfcfb;
+  --color-surface: #f6f4f1;
+  --color-surface-deep: #efece7;
+  --color-hairline: #e4e0da;
+
+  --color-ember: #ff6b2c;
+  --color-ember-deep: #c4231a;
+  --color-ember-wash: #fff1e9;
+
+  --color-teal: #0f4c5c;
+  --color-teal-soft: #e6eef1;
+
+  --color-positive: #2f6f4f;
+  --color-warning: #a86a1c;
+  --color-danger: #b02a20;
+
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter Tight', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  color-scheme: light;
+  --ember-gradient: linear-gradient(94deg, var(--color-ember) 0%, var(--color-ember-deep) 100%);
+  /* área segura de aparelhos com notch: usada pela barra fixa do carrinho */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+
+  /* Foco sempre visível: nunca removemos o anel, apenas o desenhamos melhor */
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-ember-wash);
+    color: var(--color-ink);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* iOS dá zoom em campos com fonte < 16px */
+  @supports (-webkit-touch-callout: none) {
+    input,
+    textarea,
+    select {
+      font-size: max(16px, 1em);
+    }
+  }
+}
+
+@layer components {
+  /* Assinatura da marca: o fio de brasa. Aparece embaixo da categoria ativa,
+     no botão de AR e no retículo da câmera — sempre indicando "aqui é AR". */
+  .ember-rule {
+    background: var(--ember-gradient);
+  }
+
+  .ember-text {
+    background: var(--ember-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hairline {
+    border: 1px solid var(--color-hairline);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Rolagem horizontal das categorias sem barra visível */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .scroll-x::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: calc(var(--safe-bottom) + 0.75rem);
+  }
+
+  .stack-fade {
+    animation: stack-fade 0.5s var(--ease-out-quint) both;
+  }
+}
+
+@keyframes stack-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-deep);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.6), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton::after {
+    display: none;
+  }
+}

@@ -213,6 +213,8 @@ export function ARExperience({
           </p>
         )}
 
+        <DiagnosticoAR capabilities={capabilities} model={model} />
+
         <div className="relative min-h-0 flex-1">
           <ModelViewer3D
             modelUrl={model.model_url}
@@ -301,6 +303,94 @@ function FullScreen({ children }: { children: React.ReactNode }) {
   }, []);
 
   return <div className="fixed inset-0 z-[60] flex flex-col bg-ink">{children}</div>;
+}
+
+/**
+ * Por que a câmera não abriu.
+ *
+ * Quando a AR imersiva não está disponível, dizer só "não é suportado" deixa o
+ * cliente — e o restaurante — sem saber se o problema é o aparelho, o navegador,
+ * a conexão ou o cadastro do prato. Cada linha aqui é uma condição verificada,
+ * com o que fazer quando ela falha.
+ */
+function DiagnosticoAR({
+  capabilities,
+  model,
+}: {
+  capabilities: ARCapabilities;
+  model: ProductModel;
+}) {
+  const [aberto, setAberto] = useState(false);
+
+  const linhas: { rotulo: string; ok: boolean; detalhe: string }[] = [
+    {
+      rotulo: 'Conexão segura (HTTPS)',
+      ok: capabilities.secureContext,
+      detalhe: capabilities.secureContext
+        ? 'exigência da câmera atendida'
+        : 'a câmera só abre em endereço https',
+    },
+    {
+      rotulo: 'WebXR no navegador',
+      ok: capabilities.immersiveAR,
+      detalhe: capabilities.immersiveAR
+        ? 'realidade aumentada imersiva disponível'
+        : 'no Android, precisa do Chrome e dos Serviços de RA do Google; o iPhone não tem WebXR',
+    },
+    {
+      rotulo: 'Visualizador da Apple',
+      ok: capabilities.quickLook,
+      detalhe: capabilities.quickLook
+        ? 'este aparelho abre AR Quick Look'
+        : 'caminho exclusivo de iPhone e iPad',
+    },
+    {
+      rotulo: 'Arquivo USDZ do prato',
+      ok: Boolean(model.usdz_url),
+      detalhe: model.usdz_url ? 'cadastrado' : 'sem ele, o iPhone não abre a câmera',
+    },
+    {
+      rotulo: 'Gráficos 3D (WebGL)',
+      ok: capabilities.webgl,
+      detalhe: capabilities.webgl ? 'visualizador 3D disponível' : 'navegador sem suporte a 3D',
+    },
+  ];
+
+  return (
+    <div className="mx-auto w-full max-w-md px-6 pt-2">
+      <button
+        type="button"
+        onClick={() => setAberto((valor) => !valor)}
+        aria-expanded={aberto}
+        className="mx-auto block text-[13px] text-paper/50 underline underline-offset-4"
+      >
+        {aberto ? 'Ocultar detalhes' : 'Por que a câmera não abriu?'}
+      </button>
+
+      {aberto && (
+        <dl className="mt-3 space-y-2 rounded-[8px] border border-paper/12 p-3">
+          {linhas.map((linha) => (
+            <div key={linha.rotulo} className="flex gap-2.5 text-[13px]">
+              <span
+                aria-hidden
+                className={cn(
+                  'mt-1.5 size-1.5 shrink-0 rounded-full',
+                  linha.ok ? 'bg-positive' : 'bg-ember',
+                )}
+              />
+              <div className="min-w-0">
+                <dt className="text-paper">
+                  {linha.rotulo}
+                  <span className="sr-only">{linha.ok ? ': disponível' : ': indisponível'}</span>
+                </dt>
+                <dd className="text-paper/55">{linha.detalhe}</dd>
+              </div>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
 }
 
 function ARTopBar({

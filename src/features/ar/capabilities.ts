@@ -57,16 +57,34 @@ function hasWebGL(): boolean {
 }
 
 /**
- * Quick Look é detectado por feature, não por user agent: `relList.supports`
- * responde pela própria engine.
+ * iOS e iPadOS. Existe só como rede de segurança para o Quick Look.
+ *
+ * Detecção por user agent é frágil por princípio, e por isso não decide sozinha
+ * nada aqui. Mas `relList.supports('ar')` já se comportou de forma inconsistente
+ * entre versões do WebKit, e o custo de errar é alto: o cliente de iPhone perde
+ * o único caminho de AR nativa que tem. Nesse caso específico, o falso negativo
+ * é pior que o falso positivo — se o Quick Look não abrir, a tela continua
+ * oferecendo o visualizador 3D.
+ *
+ * O iPadOS se declara Macintosh desde 2019; o número de pontos de toque é o que
+ * o separa de um Mac de verdade.
+ */
+function isAppleTouchDevice(): boolean {
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+}
+
+/**
+ * Quick Look é detectado por feature primeiro: `relList.supports` responde pela
+ * própria engine. O user agent entra apenas como segunda chance.
  */
 function supportsQuickLook(): boolean {
   try {
     const anchor = document.createElement('a');
-    if (!anchor.relList?.supports) return false;
-    if (!anchor.relList.supports('ar')) return false;
-    // A engine precisa ser WebKit para o handler nativo existir de fato
-    return typeof (window as { webkit?: unknown }).webkit !== 'undefined' || /Safari/i.test(navigator.userAgent);
+    const declaraSuporte = Boolean(anchor.relList?.supports?.('ar'));
+    if (declaraSuporte) return true;
+    return isAppleTouchDevice();
   } catch {
     return false;
   }

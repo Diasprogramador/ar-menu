@@ -111,6 +111,21 @@ arquivo que o iOS não entende: tela em branco, sem erro. Sem USDZ, o iPhone vai
 para o visualizador 3D — que continua mostrando as dimensões reais e o botão de
 pedir.
 
+### Duas armadilhas do Quick Look
+
+**O link precisa ter um único filho, e esse filho é um `<img>`.** Com texto ao
+lado da imagem, o WebKit trata o `<a rel="ar">` como download comum e a câmera
+nunca abre — sem erro no console. Por isso o link é montado em código, com a
+foto do prato como único filho, e clicado dentro do gesto do usuário.
+
+**O arquivo precisa chegar como `model/vnd.usdz+zip`.** Servido como
+`application/octet-stream`, o iOS baixa em vez de abrir. O cabeçalho está fixado
+em `vercel.json`.
+
+Além disso, o USDZ é gerado com `#allowsContentScaling=0` na URL: sem isso o
+visualizador da Apple deixa o cliente redimensionar o objeto, o que anularia a
+escala calibrada.
+
 ---
 
 ## Ciclo de vida da sessão
@@ -183,7 +198,19 @@ Convenções de todo modelo gerado:
 - Y para cima;
 - origem no centro da base — o modelo *apoia* em `y = 0`, o que faz o
   posicionamento no `hit-test` funcionar sem cálculo extra;
-- sem textura, só materiais PBR por cor: os 12 modelos somam 1,5 MB.
+- sem textura, só materiais PBR por cor: os 12 modelos somam 1,5 MB em GLB.
+
+Cada prato sai nos dois formatos na mesma execução: `.glb` para WebXR e para o
+visualizador 3D, `.usdz` para o Quick Look do iPhone. O USDZ é exportado com
+`quickLookCompatible` — o visualizador da Apple aceita um subconjunto menor de
+materiais PBR — e com ancoragem declarada em plano horizontal, para o sistema
+apoiar o prato na mesa em vez de tentar prendê-lo numa parede. Os 12 USDZ somam
+4 MB, e só são baixados quando um cliente de iPhone abre a AR.
+
+O formato exige que o zip não tenha compressão e que cada arquivo comece num
+offset múltiplo de 64 bytes; o exportador do three.js cuida disso, e vale
+conferir com um script antes de publicar, porque um USDZ desalinhado falha em
+silêncio no aparelho.
 
 Detalhe de execução: `GLTFExporter` usa `FileReader` para serializar o binário, e
 o Node não tem essa API. O script faz a ponte para `blob.arrayBuffer()`.

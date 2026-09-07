@@ -387,7 +387,8 @@ function buildModel(seed: Seed): ProductModel | null {
     restaurant_id: demoRestaurant.id,
     product_id: `prod-${seed.slug}`,
     model_url: `/demo-models/${file}.glb`,
-    usdz_url: null,
+    // O iPhone nao implementa WebXR: o USDZ e o unico caminho de AR nativa la
+    usdz_url: `/demo-models/${file}.usdz`,
     format: 'glb',
     file_size_bytes: bytes,
     ar_enabled: true,

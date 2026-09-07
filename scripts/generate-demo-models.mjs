@@ -11,13 +11,22 @@
  *   - origem no centro da base, ou seja, o modelo "apoia" em y = 0;
  *   - sem texturas: apenas materiais PBR por cor, para manter o arquivo leve.
  *
+ * Cada prato sai em dois formatos:
+ *   .glb   - WebXR e o visualizador 3D, no Android e no desktop;
+ *   .usdz  - AR Quick Look, o unico caminho de AR nativa no iPhone.
+ *
+ * O USDZ e exportado com ancoragem em plano horizontal e `quickLookCompatible`,
+ * porque o visualizador da Apple aceita um subconjunto menor de materiais PBR
+ * que o three.js.
+ *
  * Uso: node scripts/generate-demo-models.mjs
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { USDZExporter } from 'three/addons/exporters/USDZExporter.js';
 
 // GLTFExporter serializa o buffer binario com FileReader, que so existe no
 // browser. Node ja tem Blob, entao basta a ponte para ArrayBuffer.
@@ -480,16 +489,58 @@ async function exportModel({ file, build }) {
   const size = new THREE.Vector3();
   bbox.getSize(size);
 
-  const exporter = new GLTFExporter();
-  const glb = await exporter.parseAsync(scene, { binary: true, onlyVisible: true });
-  const buffer = Buffer.from(glb);
-  writeFileSync(resolve(OUT_DIR, `${file}.glb`), buffer);
+  const glb = Buffer.from(
+    await new GLTFExporter().parseAsync(scene, { binary: true, onlyVisible: true }),
+  );
+  writeFileSync(resolve(OUT_DIR, `${file}.glb`), glb);
+
+  // O Quick Look apoia o objeto sozinho na superficie detectada; declarar a
+  // ancoragem horizontal evita que ele tente prender o prato numa parede.
+  const usdz = Buffer.from(
+    await new USDZExporter().parseAsync(scene, {
+      quickLookCompatible: true,
+      includeAnchoringProperties: true,
+      ar: { anchoring: { type: 'plane' }, planeAnchoring: { alignment: 'horizontal' } },
+    }),
+  );
+  writeFileSync(resolve(OUT_DIR, `${file}.usdz`), usdz);
 
   return {
     file,
-    kb: Math.round(buffer.byteLength / 1024),
+    glbKb: Math.round(glb.byteLength / 1024),
+    usdzKb: Math.round(usdz.byteLength / 1024),
     sizeCm: [size.x, size.y, size.z].map((v) => Math.round(v * 1000) / 10),
   };
+}
+
+/**
+ * O USDZ e um zip com duas regras que o Quick Look verifica em silencio: nada
+ * pode estar comprimido, e o conteudo de cada arquivo precisa comecar num
+ * offset multiplo de 64 bytes. Violar qualquer uma faz o iPhone abrir uma tela
+ * cinza sem mensagem — o tipo de defeito que so aparece no aparelho do cliente.
+ * Por isso a conferencia roda aqui, e derruba a geracao se algo sair errado.
+ */
+function validarUsdz(caminho) {
+  const dados = readFileSync(caminho);
+  const problemas = [];
+  let cursor = 0;
+
+  while (cursor + 4 <= dados.length && dados.readUInt32LE(cursor) === 0x04034b50) {
+    const metodo = dados.readUInt16LE(cursor + 8);
+    const tamanhoComprimido = dados.readUInt32LE(cursor + 18);
+    const tamanhoNome = dados.readUInt16LE(cursor + 26);
+    const tamanhoExtra = dados.readUInt16LE(cursor + 28);
+    const nome = dados.toString('utf8', cursor + 30, cursor + 30 + tamanhoNome);
+    const inicioDoConteudo = cursor + 30 + tamanhoNome + tamanhoExtra;
+
+    if (metodo !== 0) problemas.push(`${nome} esta comprimido`);
+    if (inicioDoConteudo % 64 !== 0) problemas.push(`${nome} comeca em ${inicioDoConteudo}, fora do alinhamento de 64 bytes`);
+
+    cursor = inicioDoConteudo + tamanhoComprimido;
+  }
+
+  if (cursor === 0) problemas.push('nenhuma entrada de zip encontrada');
+  return problemas;
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
@@ -499,6 +550,30 @@ for (const model of MODELS) {
   results.push(await exportModel(model));
 }
 
-const totalKb = results.reduce((acc, r) => acc + r.kb, 0);
-console.table(results.map((r) => ({ modelo: r.file, kb: r.kb, 'L×A×P (cm)': r.sizeCm.join(' × ') })));
-console.log(`\n${results.length} modelos - ${totalKb} KB no total - ${OUT_DIR}`);
+const invalidos = results
+  .map((r) => ({ file: r.file, problemas: validarUsdz(resolve(OUT_DIR, `${r.file}.usdz`)) }))
+  .filter((r) => r.problemas.length > 0);
+
+if (invalidos.length > 0) {
+  for (const { file, problemas } of invalidos) {
+    console.error(`USDZ invalido: ${file}.usdz`);
+    for (const problema of problemas) console.error(`  - ${problema}`);
+  }
+  process.exit(1);
+}
+
+const totalGlb = results.reduce((acc, r) => acc + r.glbKb, 0);
+const totalUsdz = results.reduce((acc, r) => acc + r.usdzKb, 0);
+console.table(
+  results.map((r) => ({
+    modelo: r.file,
+    'GLB (KB)': r.glbKb,
+    'USDZ (KB)': r.usdzKb,
+    'LxAxP (cm)': r.sizeCm.join(' x '),
+  })),
+);
+console.log(
+  `
+${results.length} modelos - GLB ${totalGlb} KB, USDZ ${totalUsdz} KB - ${OUT_DIR}`,
+);
+console.log('USDZ conferidos: sem compressao e alinhados em 64 bytes.');

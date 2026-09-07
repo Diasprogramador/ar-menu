@@ -211,21 +211,21 @@ on conflict do nothing;
 -- Dimensoes conferidas contra o bounding box de cada GLB gerado.
 -- -----------------------------------------------------------------------------
 insert into public.product_models (
-  restaurant_id, product_id, model_url, format, ar_enabled,
+  restaurant_id, product_id, model_url, usdz_url, format, ar_enabled,
   width_cm, height_cm, depth_cm, diameter_cm, scale_multiplier, file_size_bytes
 ) values
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000004', '/demo-models/smash-bacon.glb',      'glb', true, 12.7,  9.9, 12.2, null, 1.0, 197632),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000005', '/demo-models/burger-da-casa.glb',   'glb', true, 15.7,  9.8, 15.4, null, 1.0, 204800),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000007', '/demo-models/pizza-margherita.glb', 'glb', true, null,  2.1, null, 30.4, 1.0, 277504),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000008', '/demo-models/pizza-pepperoni.glb',  'glb', true, null,  2.1, null, 30.4, 1.0, 381952),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000003', '/demo-models/batata-crocante.glb',  'glb', true, 10.1, 15.1, 10.8, null, 1.0,  60416),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000002', '/demo-models/aneis-de-cebola.glb',  'glb', true, 15.4,  8.2, 15.6, null, 1.0,  63488),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000013', '/demo-models/brownie.glb',          'glb', true, 18.0,  6.4, 18.0, null, 1.0,  57344),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000014', '/demo-models/petit-gateau.glb',     'glb', true, 15.0,  6.2, 15.0, null, 1.0,  64512),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000016', '/demo-models/milkshake.glb',        'glb', true, null, 20.7, null,  8.4, 1.0,  81920),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000017', '/demo-models/refrigerante.glb',     'glb', true, null, 14.0, null,  7.8, 1.0,  43008),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000010', '/demo-models/costela-defumada.glb', 'glb', true, 24.0,  5.0, 17.0, null, 1.0,  18432),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000011', '/demo-models/salada-caesar.glb',    'glb', true, null,  6.6, null, 21.0, 1.0, 153600)
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000004', '/demo-models/smash-bacon.glb', '/demo-models/smash-bacon.usdz',      'glb', true, 12.7,  9.9, 12.2, null, 1.0, 197632),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000005', '/demo-models/burger-da-casa.glb', '/demo-models/burger-da-casa.usdz',   'glb', true, 15.7,  9.8, 15.4, null, 1.0, 204800),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000007', '/demo-models/pizza-margherita.glb', '/demo-models/pizza-margherita.usdz', 'glb', true, null,  2.1, null, 30.4, 1.0, 277504),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000008', '/demo-models/pizza-pepperoni.glb', '/demo-models/pizza-pepperoni.usdz',  'glb', true, null,  2.1, null, 30.4, 1.0, 381952),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000003', '/demo-models/batata-crocante.glb', '/demo-models/batata-crocante.usdz',  'glb', true, 10.1, 15.1, 10.8, null, 1.0,  60416),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000002', '/demo-models/aneis-de-cebola.glb', '/demo-models/aneis-de-cebola.usdz',  'glb', true, 15.4,  8.2, 15.6, null, 1.0,  63488),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000013', '/demo-models/brownie.glb', '/demo-models/brownie.usdz',          'glb', true, 18.0,  6.4, 18.0, null, 1.0,  57344),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000014', '/demo-models/petit-gateau.glb', '/demo-models/petit-gateau.usdz',     'glb', true, 15.0,  6.2, 15.0, null, 1.0,  64512),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000016', '/demo-models/milkshake.glb', '/demo-models/milkshake.usdz',        'glb', true, null, 20.7, null,  8.4, 1.0,  81920),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000017', '/demo-models/refrigerante.glb', '/demo-models/refrigerante.usdz',     'glb', true, null, 14.0, null,  7.8, 1.0,  43008),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000010', '/demo-models/costela-defumada.glb', '/demo-models/costela-defumada.usdz', 'glb', true, 24.0,  5.0, 17.0, null, 1.0,  18432),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000011', '/demo-models/salada-caesar.glb', '/demo-models/salada-caesar.usdz',    'glb', true, null,  6.6, null, 21.0, 1.0, 153600)
 on conflict (product_id) do nothing;
 
 -- -----------------------------------------------------------------------------

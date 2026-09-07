@@ -93,7 +93,7 @@ npm run dev
 | `npm run build` | Typecheck + build de produção |
 | `npm run check` | Lint + typecheck + testes |
 | `npm test` | Suíte de testes |
-| `npm run gen:models` | Regera os 12 modelos GLB de demonstração |
+| `npm run gen:models` | Regera os 12 modelos de demonstração em GLB e USDZ |
 | `npm run gen:icons` | Regera os ícones PNG do PWA |
 
 ---
@@ -137,7 +137,7 @@ ou publique em qualquer host com HTTPS (Vercel, Netlify, Cloudflare Pages).
 | Plataforma | Caminho | Requisito |
 |---|---|---|
 | Android + Chrome/Edge | WebXR `immersive-ar` | Google Play Services for AR |
-| iOS + Safari | AR Quick Look | arquivo `.usdz` cadastrado no produto |
+| iOS + Safari | AR Quick Look | arquivo `.usdz` do produto (os 12 de demonstração já vêm prontos) |
 | Desktop, navegadores sem WebXR | Visualizador 3D | WebGL |
 | Sem WebGL | Ficha do prato com fotos | — |
 
@@ -209,10 +209,11 @@ toca em "Ver na minha mesa". Recharts idem, só no painel.
 
 ## Limitações conhecidas
 
-- **AR no iPhone depende de USDZ.** O iOS não implementa WebXR. Sem o arquivo
-  `.usdz` no produto, clientes de iPhone recebem o visualizador 3D. Converter
-  GLB → USDZ automaticamente exigiria processamento no servidor e está fora do
-  escopo atual.
+- **AR no iPhone depende de USDZ por produto.** O iOS não implementa WebXR, e o
+  Quick Look só abre a partir de um `.usdz`. Os 12 pratos de demonstração já
+  saem nos dois formatos (`npm run gen:models`), mas um prato novo enviado pelo
+  painel só ganha AR nativa no iPhone quando o restaurante subir também o USDZ.
+  Converter GLB → USDZ no servidor é o próximo passo.
 - **SEO é client-side.** Títulos, Open Graph e JSON-LD são aplicados no
   navegador. Rastreadores que executam JavaScript leem normalmente; para
   indexação garantida, o próximo passo é pré-renderizar as rotas públicas.

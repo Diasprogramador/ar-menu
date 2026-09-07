@@ -41,7 +41,6 @@ export function ARExperience({
   const [capabilities, setCapabilities] = useState<ARCapabilities | null>(null);
   const [mode, setMode] = useState<ARMode | null>(null);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
-  const quickLookRef = useRef<HTMLAnchorElement>(null);
 
   const dimensions = useMemo(
     () => ({
@@ -170,18 +169,17 @@ export function ARExperience({
             O iPhone abre a realidade aumentada no visualizador da Apple. Aponte a câmera para a mesa
             e o prato aparece em tamanho real.
           </p>
-          {/* Safari exige um filho <img> dentro do link com rel="ar" */}
-          <a
-            ref={quickLookRef}
-            rel="ar"
-            href={model.usdz_url}
-            onClick={() => onEvent?.('opened')}
-            className="mt-8 inline-flex h-14 items-center justify-center rounded-[10px] px-8 text-base font-medium text-white"
-            style={{ background: 'var(--ember-gradient)' }}
+          <Button
+            variant="ember"
+            size="lg"
+            className="mt-8 px-8"
+            onClick={() => {
+              onEvent?.('opened');
+              abrirQuickLook(model.usdz_url!, product.image_url);
+            }}
           >
-            <img src={product.image_url ?? ''} alt="" className="hidden" />
             Abrir em realidade aumentada
-          </a>
+          </Button>
           <button
             type="button"
             onClick={() => {
@@ -263,6 +261,35 @@ export function ARExperience({
 }
 
 /* ========================================================================== */
+
+/**
+ * Abre o AR Quick Look do iOS.
+ *
+ * O Safari só reconhece o gesto quando o `<a rel="ar">` tem **um único filho**,
+ * e esse filho é um `<img>`. Texto ao lado da imagem faz o link ser tratado como
+ * um download comum — que foi exatamente o que impedia a câmera de abrir aqui.
+ *
+ * Por isso o link é montado na hora, com a imagem do prato como único filho, e
+ * clicado por código dentro do gesto do usuário. O elemento não precisa estar
+ * visível; ele existe só para carregar a semântica que o WebKit procura.
+ */
+function abrirQuickLook(usdzUrl: string, imagemDoPrato: string | null): void {
+  const link = document.createElement('a');
+  link.rel = 'ar';
+  // `#allowsContentScaling=0` impede que o cliente redimensione o prato no
+  // visualizador da Apple: a promessa é tamanho real, não maquete ajustável.
+  link.href = `${usdzUrl}#allowsContentScaling=0`;
+
+  const imagem = document.createElement('img');
+  imagem.src = imagemDoPrato ?? '';
+  imagem.alt = '';
+  link.appendChild(imagem);
+
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 function FullScreen({ children }: { children: React.ReactNode }) {
   useEffect(() => {

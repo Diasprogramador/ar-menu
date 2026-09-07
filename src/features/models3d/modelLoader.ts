@@ -9,7 +9,7 @@ import { calibrateScale, type BoundingBoxSize, type PhysicalDimensions, type Sca
  * Carregamento, medição e preparo de modelos GLB/GLTF.
  *
  * Responsabilidades separadas de propósito:
- *   - `loadGltf`      busca e faz o parse, com cache LRU e cancelamento;
+ *   - `loadGltf`      busca e faz o parse, com cache LRU compartilhado;
  *   - `measureModel`  mede o bounding box em unidades de cena;
  *   - `prepareModel`  devolve um grupo com origem no centro da base, já
  *                     calibrado para as dimensões físicas do produto.
@@ -19,7 +19,7 @@ import { calibrateScale, type BoundingBoxSize, type PhysicalDimensions, type Sca
  */
 
 export class ModelLoadError extends Error {
-  readonly kind: 'network' | 'invalid' | 'timeout' | 'aborted';
+  readonly kind: 'network' | 'invalid' | 'timeout';
   override readonly cause: unknown;
 
   constructor(message: string, kind: ModelLoadError['kind'], cause?: unknown) {
@@ -95,10 +95,16 @@ export function measureModel(object: THREE.Object3D): BoundingBoxSize {
 /**
  * Baixa e faz o parse do modelo. O resultado fica em cache porque o mesmo
  * produto costuma ser aberto em 3D e depois em AR na mesma sessão.
+ *
+ * Sem cancelamento de propósito: a promise é compartilhada entre consumidores,
+ * então abortá-la por causa de um que saiu da tela derrubaria os outros. Foi
+ * exatamente isso que o remount duplo do StrictMode expôs — o segundo mount
+ * pegava do cache a promise que o primeiro acabara de rejeitar. Quem desmonta
+ * apenas ignora o resultado; o download em curso ainda alimenta o cache.
  */
 export function loadGltf(
   url: string,
-  options: { signal?: AbortSignal; onProgress?: (ratio: number) => void } = {},
+  options: { onProgress?: (ratio: number) => void } = {},
 ): Promise<LoadedGltf> {
   const cached = cache.get(url);
   if (cached) {
@@ -114,17 +120,10 @@ export function loadGltf(
       reject(new ModelLoadError('O modelo 3D demorou demais para carregar.', 'timeout'));
     }, LOAD_TIMEOUT_MS);
 
-    const onAbort = () => {
-      window.clearTimeout(timeout);
-      reject(new ModelLoadError('Carregamento cancelado.', 'aborted'));
-    };
-    options.signal?.addEventListener('abort', onAbort, { once: true });
-
     getLoader().load(
       url,
       (gltf) => {
         window.clearTimeout(timeout);
-        options.signal?.removeEventListener('abort', onAbort);
 
         const scene = gltf.scene ?? gltf.scenes?.[0];
         if (!scene) {
@@ -145,7 +144,6 @@ export function loadGltf(
       },
       (error) => {
         window.clearTimeout(timeout);
-        options.signal?.removeEventListener('abort', onAbort);
         reject(
           new ModelLoadError(
             'Não foi possível baixar o modelo 3D deste prato.',

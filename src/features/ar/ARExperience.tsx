@@ -215,12 +215,12 @@ export function ARExperience({
           </p>
         )}
 
-        <div className="relative flex-1">
+        <div className="relative min-h-0 flex-1">
           <ModelViewer3D
             modelUrl={model.model_url}
             dimensions={dimensions}
             placement={placement}
-            className="absolute inset-0"
+            className="size-full"
             onReady={() => onEvent?.('3d')}
           />
           <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[13px] text-paper/50">

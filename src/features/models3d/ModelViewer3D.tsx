@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } from './modelLoader';
+import { cn } from '@/lib/cn';
 import type { PhysicalDimensions, ScaleCalibration } from '@/features/ar/scale';
 
 /**
@@ -61,7 +62,6 @@ export function ModelViewer3D({
     const container = containerRef.current;
     if (!container) return;
 
-    const abort = new AbortController();
     let disposed = false;
     let frameId = 0;
 
@@ -127,7 +127,6 @@ export function ModelViewer3D({
     setState({ status: 'loading', progress: 0 });
 
     loadGltf(modelUrl, {
-      signal: abort.signal,
       onProgress: (ratio) => {
         if (!disposed) setState({ status: 'loading', progress: ratio });
       },
@@ -202,7 +201,6 @@ export function ModelViewer3D({
 
     return () => {
       disposed = true;
-      abort.abort();
       cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
       controls.dispose();
@@ -220,8 +218,10 @@ export function ModelViewer3D({
   }, [modelUrl, dimensions, placement, showGrid, autoRotate]);
 
   return (
-    <div className={className} style={{ position: 'relative' }}>
-      <div ref={containerRef} className="h-full w-full" aria-hidden={state.status !== 'ready'} />
+    // `relative` vem por classe, não por style inline: inline venceria o
+    // posicionamento que o chamador escolher e a cena ficaria com altura zero.
+    <div className={cn('relative', className)}>
+      <div ref={containerRef} className="size-full" aria-hidden={state.status !== 'ready'} />
 
       {state.status === 'loading' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface/70 backdrop-blur-[2px]">

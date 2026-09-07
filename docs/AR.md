@@ -234,53 +234,112 @@ Convenções de todo modelo gerado:
 - Y para cima;
 - origem no centro da base — o modelo *apoia* em `y = 0`, o que faz o
   posicionamento no `hit-test` funcionar sem cálculo extra;
-- textura e relevo procedurais, gerados no mesmo passo.
+- aparência definida por cor de material e cor por vértice, sem nenhuma textura.
 
-### Por que a primeira versão parecia massinha de modelar
+### Duas tentativas até a comida parecer comida
 
-A versão inicial empilhava cilindros de cor chapada. O resultado tinha a forma
-certa e a leitura errada: uma superfície lisa e de cor uniforme devolve sempre o
-mesmo brilho, e o olho conclui plástico. Três camadas resolveram isso, cada uma
-respondendo por uma distância de leitura:
+**Primeira versão: cilindros de cor chapada.** Forma certa, leitura errada — uma
+superfície lisa e de cor uniforme devolve sempre o mesmo brilho, e o olho conclui
+plástico.
 
-| Camada | O que resolve | Onde vive |
-|---|---|---|
-| Deformação por ruído | a silhueta, que se lê de longe | `deformar` |
-| Textura de cor e relevo | a superfície, que se lê de perto | `texturas.mjs` |
-| Cor por vértice | o que é específico da peça e não se repete | `pintar` |
+**Segunda versão: perseguir fotorrealismo.** Ruído coerente deslocando todos os
+vértices, textura procedural em cada peça, mapa de normais forte por toda parte.
+Saiu pior que a primeira, e o dono do produto resumiu melhor do que qualquer
+métrica: *"parece massinha de modelar"*.
 
-A terceira existe porque a borda carbonizada de um hambúrguer ou a mancha de
-leopardo de uma pizza não são padrão: dependem de onde o ponto está na peça, e
-por isso não podem vir de uma textura que se repete.
+O diagnóstico, olhando o render lado a lado com a foto do prato:
 
-### A armadilha da UV
+| Sintoma | Causa |
+|---|---|
+| Silhueta mole, sem aresta | 3 mm de ruído de baixa frequência em cima de peças de 12 cm |
+| Superfície de barro | mapa de normais de ruído, com `normalScale` acima de 1,5 em tudo |
+| Tudo com aparência do mesmo material | `roughness` entre 0,5 e 0,9 em toda peça, sem especular |
+| Cor de lama | paleta dessaturada, depois comprimida de novo pelo tone mapping ACES |
 
-O defeito mais difícil de diagnosticar foi a carne com cara de tábua de madeira.
-A causa não era a textura, e sim as UV que as geometrias primitivas trazem: elas
-seguem a topologia, não o tamanho. A lateral de um cilindro mapeia V ao longo da
-altura, então um hambúrguer com 37 cm de circunferência e 1,9 cm de altura
-estica a textura vinte vezes, e todo ruído vira listra horizontal.
+O erro de fundo não era a execução: era o alvo. Modelagem procedural não alcança
+pele de tomate nem miolo de pão, e **falhar tentando sai pior do que não
+tentar** — é a definição do vale da estranheza.
 
-A correção é `projetarUv`, que reescreve as UV por projeção em caixa na escala
-do mundo: um ladrilho passa a medir sempre os mesmos centímetros, em qualquer
-peça e em qualquer geometria. A projeção deixa costura onde a normal troca de
-eixo dominante, mas em superfície irregular com textura de ruído isso não se
-distingue.
+### Terceira versão: ilustrada, não simulada
 
-### Iluminação faz metade do trabalho
+A direção atual não disputa com a fotografia; ela assume um desenho deliberado.
+Três regras, em `acabamento.mjs` e `pratos.mjs`:
 
-Mapa de normais só aparece se a luz variar pela superfície. Com iluminação
-ambiente difusa, o relevo some e o modelo volta a parecer plástico mesmo com a
-textura correta. O visualizador usa a montagem de fotografia de comida: chave
-quente e rasante, que revela relevo; contraluz fria, que separa a silhueta;
-preenchimento baixo, só para a sombra não fechar em preto.
+| Regra | Como aparece no código |
+|---|---|
+| Silhueta antes de superfície | perfis girados com aresta preservada; `ondular` no lugar de `deformar` |
+| Cada comida com o seu brilho | tabela `ACABAMENTOS`: pão fosco, carne com sebo, queijo envernizado, tomate molhado |
+| Sinal de identidade desenhado, nunca sorteado | borda rendada do smash, gergelim, alface saindo do pão, miolo claro do tomate |
+
+`ondular` multiplica o raio por um seno de baixa frequência do ângulo. Diferente
+do deslocamento por ruído, muda a silhueta **sem** comer a aresta: o pão fica
+irregular como pão assado à mão, em vez de amassado. Somando três harmônicos —
+7, 17 e 31 ondas — sai a franja rendada que identifica um hambúrguer prensado na
+chapa.
+
+Ruído sobrou em dois lugares onde o irregular *é* a identidade do alimento: a
+farinha de rosca do anel de cebola e a casca rachada do brownie.
+
+Consequência de projeto: sem textura nenhuma, o GLB do conjunto caiu de 5,2 MB
+para 2,4 MB. Mapa de normais não deduplica entre materiais, então cada peça
+pagava a sua cópia.
+
+### O brilho depende de ter o que refletir
+
+`clearcoat` é uma segunda camada especular por cima do material — exatamente o
+que a gordura da carne, o verniz do queijo derretido e a água do tomate fazem na
+vida real. Só que ele **precisa de um mapa de ambiente**: sem nada para
+refletir, a peça chega fosca e a diferença entre pão e queijo desaparece.
+
+O visualizador 3D já usava `RoomEnvironment`; as duas sessões de AR, não. Era
+por isso que o prato parecia pior na câmera do que na tela de detalhe, mesmo
+sendo o mesmo arquivo. Hoje as três cenas montam o mesmo ambiente, gerado em
+memória — reflexo PBR crível sem baixar um HDRI e sem custo de rede no meio da
+experiência. A textura é liberada no encerramento da sessão, junto com o resto.
+
+A luz completa a conta: chave quente e rasante, que acende o especular;
+contraluz fria, que separa a silhueta; preenchimento baixo, só para a sombra não
+fechar em preto. A intensidade caiu junto com a mudança de paleta — com a luz
+antiga, as cores novas chegavam na tela quase brancas.
+
+### Medir a caixa envolvente com `precise`
+
+`Box3.setFromObject(objeto)` transforma a caixa da geometria pela matriz do
+objeto e devolve a caixa disso. Para uma peça rotacionada, o resultado é a
+diagonal: uma folha de alface girada 0,9 rad inflava a largura declarada do
+prato em 41%, e a calibração encolhia o modelo na mesa pelo mesmo fator.
+
+O segundo argumento — `setFromObject(objeto, true)` — percorre os vértices de
+verdade. Custa mais, roda uma vez por build, e é o que sustenta a promessa de
+tamanho real.
+
+### Lâmina com duas faces, porque o USDZ não aceita `DoubleSide`
+
+Fatia de queijo, folha de alface e tira de bacon nascem de um plano, que só tem
+uma face. A saída fácil seria `side: THREE.DoubleSide`, mas o USDZ não suporta
+material de dupla face: no iPhone, essas peças sumiriam vistas por baixo — que é
+justamente o ângulo de quem olha um prato na mesa.
+
+`duasFaces` resolve na geometria: uma cópia deslocada para dentro pela
+espessura, com as normais invertidas e o sentido dos triângulos trocado. Sai uma
+casca sólida que funciona nos dois formatos e ainda sombreia melhor, porque
+passa a ter volume.
+
+### O teto desta abordagem
+
+Os pratos são ilustrações tridimensionais com dimensão física correta. Não são
+fotorrealistas, e nenhuma quantidade de ajuste procedural os tornará. Para
+chegar em foto de verdade o caminho é substituir os arquivos por modelos
+esculpidos ou por fotogrametria dos pratos reais — e a calibração já aceita
+qualquer arquivo, porque `calibrateScale` normaliza qualquer unidade e
+`prepareModel` recentraliza qualquer pivô.
 
 Cada prato sai nos dois formatos na mesma execução: `.glb` para WebXR e para o
 visualizador 3D, `.usdz` para o Quick Look do iPhone. O USDZ é exportado com
 `quickLookCompatible` — o visualizador da Apple aceita um subconjunto menor de
 materiais PBR — e com ancoragem declarada em plano horizontal, para o sistema
 apoiar o prato na mesa em vez de tentar prendê-lo numa parede. Os 12 USDZ somam
-4 MB, e só são baixados quando um cliente de iPhone abre a AR.
+7,3 MB, e só são baixados quando um cliente de iPhone abre a AR.
 
 O formato exige que o zip não tenha compressão e que cada arquivo comece num
 offset múltiplo de 64 bytes; o exportador do three.js cuida disso, e vale

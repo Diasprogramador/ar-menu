@@ -72,7 +72,7 @@
         renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
         renderer.setSize(canvas.clientWidth || 380, 340, false);
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.1;
+        renderer.toneMappingExposure = 1.0;
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -82,7 +82,7 @@
 
         const camera = new THREE.PerspectiveCamera(34, (canvas.clientWidth || 380) / 340, 0.01, 20);
 
-        const luz = new THREE.DirectionalLight(0xfff4e6, 2.6);
+        const luz = new THREE.DirectionalLight(0xfff4e6, 2.3);
         luz.castShadow = true;
         luz.shadow.mapSize.set(1024, 1024);
         scene.add(luz);
@@ -96,7 +96,9 @@
           });
           scene.add(objeto);
 
-          const caixa = new THREE.Box3().setFromObject(objeto);
+          // `precise` percorre os vertices: sem ele, uma peca rotacionada mede a
+          // diagonal da propria caixa e a dimensao exibida mente.
+          const caixa = new THREE.Box3().setFromObject(objeto, true);
           const tamanho = caixa.getSize(new THREE.Vector3());
           const raio = Math.max(tamanho.x, tamanho.y, tamanho.z);
 

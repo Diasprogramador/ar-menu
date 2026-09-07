@@ -73,7 +73,7 @@ export function ModelViewer3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
@@ -95,10 +95,15 @@ export function ModelViewer3D({
     );
 
     // Iluminação de mesa de fotografia de comida, e não luz de estúdio neutra.
-    // A chave entra rasante, de cima e de lado: é o ângulo que revela relevo —
-    // o poro do pão, a fibra da carne, a irregularidade do empanado. Com luz
-    // difusa e frontal, o mapa de normais some e tudo volta a parecer plástico.
-    const key = new THREE.DirectionalLight(0xfff1e0, 3.4);
+    // A chave entra rasante, de cima e de lado: é o ângulo que revela forma e
+    // acende o brilho especular — a casca do brioche, o verniz do queijo, a
+    // gordura da carne. Com luz difusa e frontal, o especular some e tudo volta
+    // a parecer fosco.
+    //
+    // A intensidade caiu de 3,4 para 2,3 junto com a exposição: os modelos
+    // deixaram de ser marrons dessaturados e passaram a ter cor cheia, e com a
+    // luz antiga o pão chegava na tela quase branco.
+    const key = new THREE.DirectionalLight(0xfff1e0, 2.3);
     key.position.set(0.6, 1.4, 0.9);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -110,13 +115,13 @@ export function ModelViewer3D({
 
     // Contraluz fria: separa a silhueta do fundo e marca a borda molhada de
     // molho e queijo, que é onde o brilho especular conta a textura.
-    const rim = new THREE.DirectionalLight(0xdce8ff, 1.5);
+    const rim = new THREE.DirectionalLight(0xdce8ff, 1.1);
     rim.position.set(-0.9, 0.7, -1.1);
     scene.add(rim);
 
     // Preenchimento baixo: o suficiente para a sombra não fechar em preto,
     // sem lavar o contraste que a chave criou.
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.55));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.4));
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;

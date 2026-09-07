@@ -5,196 +5,247 @@
  * origem no centro da base — o modelo apoia em y = 0, que é o que faz o
  * posicionamento na superfície detectada funcionar sem cálculo extra.
  *
- * A regra que orienta o desenho: comida não tem superfície lisa nem cor
- * uniforme. Todo pedaço passa por `deformar` e ganha cor por vértice. Onde a
- * comida realmente tosta, escurece ou brilha, isso está no modelo — a borda
- * carbonizada do hambúrguer, as manchas de leopardo na borda da pizza, as
- * pontas mais escuras da batata.
+ * A regra que orienta o desenho mudou. A primeira versão perseguia
+ * fotorrealismo: ruído deslocando cada vértice, textura procedural em tudo,
+ * relevo forte por toda parte. Isso produziu silhueta mole e superfície
+ * granulada — comida com cara de massinha de modelar. O caminho procedural não
+ * alcança pele de tomate nem miolo de pão; tentar e errar sai pior do que não
+ * tentar.
+ *
+ * A direção agora é **ilustrada**: forma limpa, cor cheia, brilho contrastado.
+ * Três regras concretas:
+ *
+ *   1. **Silhueta antes de superfície.** O que identifica um hambúrguer a três
+ *      metros de distância é a pilha de camadas com bordas visíveis, não o poro
+ *      do pão. Perfis girados e arestas preservadas; nada de ruído amassando o
+ *      contorno.
+ *   2. **Cada comida com o seu brilho.** Pão fosco, carne com sebo, queijo
+ *      envernizado, tomate molhado. É o contraste de `roughness`/`clearcoat`
+ *      que faz o olho separar os ingredientes — sem ele, tudo vira o mesmo
+ *      material colorido de formas diferentes.
+ *   3. **Sinal de identidade é geometria ou cor chapada, nunca ruído.** Marca
+ *      de chapa na carne, gergelim no pão, alface saindo para fora do pão,
+ *      miolo claro no tomate: tudo desenhado de propósito, com transição
+ *      nítida.
+ *
+ * Ruído sobrou em dois lugares onde a irregularidade *é* a identidade da
+ * comida: a farinha de rosca do anel de cebola e a casca rachada do brownie.
  */
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-import { cm, deformar, disco, fbm, girar, granular, material, peca, pintar, sorteio } from './modelagem.mjs';
+import { PALETA as C, material, ondular } from './acabamento.mjs';
+import {
+  cm,
+  deformar,
+  disco,
+  duasFaces,
+  fbm,
+  girar,
+  granular,
+  peca,
+  pintar,
+  sorteio,
+} from './modelagem.mjs';
 
 const TAU = Math.PI * 2;
-
-const CORES = {
-  paoTopo: '#C98A45',
-  paoBase: '#BE7F3D',
-  gergelim: '#F0DFB8',
-  carne: '#59331F',
-  queijo: '#E9A227',
-  bacon: '#9E3520',
-  alface: '#5E9438',
-  tomate: '#C0392B',
-  cebola: '#E3D2C2',
-  massa: '#DFB877',
-  borda: '#C99551',
-  molho: '#A8331F',
-  mucarela: '#F2E7CE',
-  manjericao: '#3B7233',
-  pepperoni: '#98241F',
-  batata: '#DDA13A',
-  papel: '#E6DFD1',
-  empanado: '#CE9642',
-  chocolate: '#3A1F14',
-  baunilha: '#F3E9D2',
-  morango: '#DE6C8E',
-  calda: '#6B2814',
-  vidro: '#D5E2E7',
-  refri: '#391C0F',
-  gelo: '#E8F3F7',
-  louca: '#EFEAE1',
-  costela: '#5A2A19',
-  glace: '#77300F',
-  folha: '#4E8B39',
-  parmesao: '#EDD79B',
-  crouton: '#D2AE72',
-  tigela: '#333A3D',
-  madeira: '#7A5230',
-};
 
 /* =========================================================================
  * Hambúrguer
  * ====================================================================== */
 
-/** Pão de hambúrguer: perfil girado, casca irregular e topo mais tostado. */
+/**
+ * Perfil da cúpula do pão, como função do raio normalizado.
+ *
+ * Fica numa constante porque duas coisas precisam concordar: a geometria do
+ * pão e a altura em que cada gergelim assenta. Quando eram fórmulas separadas,
+ * as sementes flutuavam alguns milímetros acima da casca.
+ */
+const EXPOENTE_DOMO = 0.42;
+const raioDoDomo = (t) => Math.pow(Math.max(0, 1 - t * t), EXPOENTE_DOMO);
+const alturaDoDomo = (u) => Math.sqrt(Math.max(0, 1 - Math.pow(u, 1 / EXPOENTE_DOMO)));
+
+/** Tampa do pão: cúpula com um ressalto definido na base, como brioche. */
 function paoSuperior(raio, altura) {
   const perfil = [];
-  const passos = 14;
+  const passos = 18;
   for (let i = 0; i <= passos; i += 1) {
     const t = i / passos;
-    // Curva de cúpula achatada, com a "cintura" onde o pão encosta no recheio
-    const r = raio * Math.sqrt(1 - t * t * 0.94) * (1 - 0.06 * Math.sin(t * Math.PI));
-    perfil.push([r, t * altura]);
+    perfil.push([raio * raioDoDomo(t), t * altura]);
   }
-  perfil.push([0, altura]);
 
-  const g = girar(perfil, 56);
-  deformar(g, { amplitude: cm(0.3), frequencia: 18, oitavas: 4, semente: 3 });
-  pintar(g, (x, y, z) => {
-    // O topo assa mais que a lateral: escurece com a altura
-    const assado = 1 - (y / altura) * 0.22;
-    const manchas = 0.94 + fbm(x * 70, y * 70, z * 70) * 0.16;
-    return [assado * manchas * 1.02, assado * manchas * 0.97, assado * manchas * 0.9];
+  const g = girar(perfil, 64);
+  ondular(g, { ondas: 7, amplitude: 0.014 });
+  pintar(g, (x, y) => {
+    // A coroa pega mais forno que a saia: clareia de baixo para cima, com
+    // transição suave. Nada de manchas — mancha aleatória lê como sujeira.
+    const alto = y / altura;
+    const dourado = 1.02 - alto * 0.06;
+    return [dourado, dourado * 0.985, dourado * 0.95];
   });
   return g;
 }
 
+/** Base do pão: lateral reta e face de corte clara, onde se vê o miolo. */
 function paoInferior(raio, altura) {
   const g = girar(
     [
-      [raio * 0.9, 0],
-      [raio * 0.99, altura * 0.35],
-      [raio, altura * 0.75],
-      [raio * 0.985, altura],
+      [raio * 0.84, 0],
+      [raio * 0.96, altura * 0.24],
+      [raio, altura * 0.6],
+      [raio, altura * 0.92],
+      [raio * 0.97, altura],
       [0, altura],
     ],
-    56,
+    64,
   );
-  deformar(g, { amplitude: cm(0.22), frequencia: 20, oitavas: 4, semente: 11 });
-  pintar(g, (x, y, z) => {
-    // A face cortada, no topo, é miolo claro; a lateral é casca
-    const miolo = y > altura * 0.9 ? 1.14 : 1;
-    return miolo * (0.93 + fbm(x * 64, y * 64, z * 64) * 0.14);
+  ondular(g, { ondas: 7, amplitude: 0.012, fase: 1.1 });
+  pintar(g, (x, y) => {
+    // Degrau nítido: acima disso é miolo cortado, abaixo é casca. A transição
+    // dura faz o pão parecer fatiado, e não moldado.
+    const miolo = y > altura * 0.9;
+    return miolo ? [1.3, 1.28, 1.18] : [1, 0.99, 0.96];
   });
   return g;
 }
 
-/** Hambúrguer: disco irregular com a borda carbonizada. */
+/**
+ * Hambúrguer: disco fino de borda rendada, prensado na chapa.
+ *
+ * A borda é o ponto. Um smash é jogado na chapa e amassado: a carne espalha,
+ * a franja que escapa fritura antes do resto e vira uma renda escura e
+ * irregular. É esse contorno — não o poro da carne — que faz alguém reconhecer
+ * a foto de um smash. A primeira versão tinha borda lisa e ruído por cima, e
+ * saía um disco de chocolate.
+ *
+ * A irregularidade vem de três senos sobrepostos, e não de ruído: senos dão um
+ * contorno recortado e contínuo, com o mesmo resultado em toda execução. Ruído
+ * na mesma amplitude come a aresta e devolve a aparência de massinha.
+ */
 function hamburguer(raio, altura) {
-  const g = disco(raio, altura, { segmentos: 52, raioBase: raio * 0.97 });
-  deformar(g, { amplitude: cm(0.3), frequencia: 16, oitavas: 4, semente: 7 });
+  const g = girar(
+    [
+      [raio * 0.94, 0],
+      [raio, altura * 0.2],
+      [raio * 0.99, altura * 0.5],
+      [raio * 0.95, altura * 0.82],
+      [raio * 0.85, altura],
+      [0, altura],
+    ],
+    72,
+  );
+
+  // Três harmônicos: o grosso da deformação, o recorte médio e a franja fina
+  ondular(g, { ondas: 7, amplitude: 0.035, fase: 0.6 });
+  ondular(g, { ondas: 17, amplitude: 0.022, fase: 1.9 });
+  ondular(g, { ondas: 31, amplitude: 0.011, fase: 4.1 });
+
   pintar(g, (x, y, z) => {
     const distancia = Math.hypot(x, z) / raio;
-    // A crosta escura fica no anel externo e no topo, onde encostou na chapa
-    const crosta = Math.max(0, distancia - 0.72) * 2.2;
-    const chapa = y > altura * 0.7 ? 0.35 : 0;
-    const escuro = Math.min(0.62, crosta + chapa);
-    const grao = 0.9 + fbm(x * 90, y * 90, z * 90) * 0.2;
-    return (1 - escuro) * grao;
+
+    // Crosta: escura e curta, colada na borda. Um degradê longo lia como
+    // sujeira; a transição de 12% do raio lê como carne selada.
+    const crosta = distancia > 0.88 ? Math.min(1, (distancia - 0.88) / 0.12) : 0;
+
+    // Faixa caramelizada logo antes da crosta, onde a carne dourou sem queimar
+    const caramelo = distancia > 0.72 && distancia < 0.9 ? 0.16 : 0;
+
+    const tom = 1 + caramelo - crosta * 0.62;
+    return [tom, tom * 0.93, tom * 0.86];
   });
   return g;
 }
 
 /** Fatia de queijo derretido: quadrado que amolece e escorre nas pontas. */
 function queijoDerretido(raio, grupo, y) {
-  const lado = raio * 1.42;
-  const g = new THREE.PlaneGeometry(lado, lado, 22, 22);
+  const lado = raio * 1.5;
+  const g = new THREE.PlaneGeometry(lado, lado, 18, 18);
   g.rotateX(-Math.PI / 2);
 
   const posicoes = g.attributes.position;
   for (let i = 0; i < posicoes.count; i += 1) {
     const x = posicoes.getX(i);
     const z = posicoes.getZ(i);
-    const distancia = Math.max(Math.abs(x), Math.abs(z)) / (lado / 2);
-    // Fora do disco de carne o queijo despenca; dentro, ondula de leve
-    const queda = distancia > 0.62 ? -Math.pow((distancia - 0.62) / 0.38, 1.7) * cm(2.2) : 0;
-    posicoes.setY(i, queda + (fbm(x * 60, 0, z * 60) - 0.5) * cm(0.16));
+    // A fatia acompanha a carne até a borda dela e despenca depois. A queda é
+    // uma curva suave, não ruído: queijo derretido escorre liso.
+    const fora = Math.max(Math.abs(x), Math.abs(z)) / (lado / 2);
+    const queda = fora > 0.6 ? -Math.pow((fora - 0.6) / 0.4, 1.8) * cm(2.4) : 0;
+    // Leve barriga no meio, onde o queijo afunda sobre a carne
+    const barriga = -Math.cos((Math.min(fora, 0.6) / 0.6) * Math.PI * 0.5) * cm(0.12);
+    posicoes.setY(i, queda + barriga);
   }
   posicoes.needsUpdate = true;
   g.computeVertexNormals();
-  granular(g, 0.14, 45);
+  granular(g, 0.07, 40);
 
-  grupo.add(peca(g, material(CORES.queijo, { roughness: 0.3, receita: 'queijo', relevo: 1.14 }), { y }));
+  grupo.add(peca(duasFaces(g), material(C.queijo, 'derretido'), { y }));
 }
 
-/** Tira de bacon: ondulada, com faixas alternadas de carne e gordura. */
+/** Tira de bacon: ondulada, com faixas de gordura de borda nítida. */
 function tiraDeBacon(comprimento, largura, semente) {
-  const g = new THREE.PlaneGeometry(comprimento, largura, 30, 4);
+  const g = new THREE.PlaneGeometry(comprimento, largura, 26, 3);
   g.rotateX(-Math.PI / 2);
 
   const posicoes = g.attributes.position;
   for (let i = 0; i < posicoes.count; i += 1) {
     const x = posicoes.getX(i);
-    posicoes.setY(i, Math.sin(x * 46 + semente) * cm(0.22) + (fbm(x * 80, semente, 0) - 0.5) * cm(0.1));
+    posicoes.setY(i, Math.sin(x * 44 + semente) * cm(0.26));
   }
   posicoes.needsUpdate = true;
   g.computeVertexNormals();
 
   pintar(g, (x, y, z) => {
-    // Faixas de gordura: mais claras, quase brancas
-    const faixa = Math.sin(z * 220 + x * 30) * 0.5 + 0.5;
-    const gordura = faixa > 0.62 ? 1.5 : 1;
-    return [gordura, gordura * (faixa > 0.62 ? 0.92 : 0.86), gordura * (faixa > 0.62 ? 0.84 : 0.8)];
+    // Duas faixas de gordura ao longo da tira, com corte seco entre elas
+    const atravessado = z / (largura / 2);
+    const gordura = Math.abs(atravessado) > 0.55 || Math.abs(atravessado + 0.15) < 0.12;
+    return gordura ? [1.62, 1.34, 1.16] : [1, 0.92, 0.86];
   });
-  return g;
+  return duasFaces(g);
 }
 
-/** Folha de alface: ruflada nas bordas, como a americana de verdade. */
-function folhaDeAlface(raio, semente) {
-  const g = new THREE.CircleGeometry(raio, 26, 0, TAU);
+/**
+ * Coroa de alface: anel ondulado que passa do raio do pão.
+ *
+ * Sair para fora é o ponto. A folha escondida sob o pão não aparece em
+ * silhueta, e era exatamente por isso que o hambúrguer lia como uma pilha de
+ * discos marrons.
+ */
+function coroaDeAlface(raioInterno, raioExterno, semente) {
+  const g = new THREE.RingGeometry(raioInterno, raioExterno, 44, 3);
   g.rotateX(-Math.PI / 2);
 
   const posicoes = g.attributes.position;
   for (let i = 0; i < posicoes.count; i += 1) {
     const x = posicoes.getX(i);
     const z = posicoes.getZ(i);
-    const distancia = Math.hypot(x, z) / raio;
+    const distancia = Math.hypot(x, z);
+    const t = (distancia - raioInterno) / (raioExterno - raioInterno);
     const angulo = Math.atan2(z, x);
-    // Onda na borda + inclinação para o centro: a folha "abraça" o recheio
-    const rufo = Math.sin(angulo * 7 + semente) * distancia * distancia * cm(0.5);
-    posicoes.setY(i, rufo - distancia * distancia * cm(0.25));
+    // Rufo: onda angular que só existe na borda livre da folha
+    posicoes.setY(i, Math.sin(angulo * 9 + semente) * t * t * cm(0.85) - t * cm(0.2));
   }
   posicoes.needsUpdate = true;
   g.computeVertexNormals();
+
   pintar(g, (x, y, z) => {
-    const distancia = Math.hypot(x, z) / raio;
-    // Nervura central mais clara, borda mais viva
-    const claro = 1.22 - distancia * 0.28;
-    return [claro * 0.92, claro, claro * 0.82];
+    const distancia = Math.hypot(x, z);
+    const t = (distancia - raioInterno) / (raioExterno - raioInterno);
+    // Base da folha bem mais clara que a borda — é assim na alface americana
+    const claro = 1.28 - t * 0.42;
+    return [claro * 0.9, claro, claro * 0.78];
   });
-  return g;
+  return duasFaces(g);
 }
 
+/** Rodela de tomate: disco molhado com miolo claro de contorno definido. */
 function rodelaDeTomate(raio, altura) {
-  const g = disco(raio, altura, { segmentos: 34 });
-  deformar(g, { amplitude: cm(0.05), frequencia: 40, semente: 21 });
+  const g = disco(raio, altura, { segmentos: 40 });
+  ondular(g, { ondas: 6, amplitude: 0.02 });
   pintar(g, (x, y, z) => {
     const distancia = Math.hypot(x, z) / raio;
-    // Miolo mais claro e com semente; polpa externa mais saturada
-    const miolo = distancia < 0.45 ? 1.3 : 1;
-    return [miolo, miolo * 0.82, miolo * 0.78];
+    // Miolo claro com transição curta: a polpa tem contorno, não degradê
+    const miolo = distancia < 0.5 ? 1.45 : distancia < 0.58 ? 1.2 : 1;
+    return [miolo, miolo * 0.74, miolo * 0.7];
   });
   return g;
 }
@@ -204,61 +255,61 @@ export function construirHamburguer({ raio, camadas }) {
   const aleatorio = sorteio(4242);
   let y = 0;
 
-  const alturaBase = cm(1.7);
-  grupo.add(peca(paoInferior(raio * 0.97, alturaBase), material(CORES.paoBase, { roughness: 0.9, receita: 'pao', relevo: 1.61 }), { y }));
+  const alturaBase = cm(1.8);
+  grupo.add(peca(paoInferior(raio * 0.97, alturaBase), material(C.paoBase, 'brioche'), { y }));
   y += alturaBase;
 
   for (const camada of camadas) {
     switch (camada) {
       case 'carne': {
-        const altura = cm(1.9);
-        grupo.add(peca(hamburguer(raio, altura), material(CORES.carne, { roughness: 0.66, receita: 'carne', relevo: 2.09 }), { y }));
-        y += altura * 0.92;
+        const altura = cm(1.6);
+        grupo.add(peca(hamburguer(raio, altura), material(C.carne, 'grelhado'), { y }));
+        y += altura * 0.94;
         break;
       }
       case 'queijo':
-        queijoDerretido(raio, grupo, y + cm(0.1));
-        y += cm(0.35);
+        queijoDerretido(raio, grupo, y + cm(0.12));
+        y += cm(0.4);
         break;
       case 'bacon': {
         for (let i = 0; i < 3; i += 1) {
-          const g = tiraDeBacon(raio * 1.9, cm(2.1), i * 2.3);
+          const g = tiraDeBacon(raio * 1.95, cm(2.2), i * 2.3);
           grupo.add(
-            peca(g, material(CORES.bacon, { roughness: 0.42, receita: 'carne', relevo: 1.52 }), {
-              y: y + cm(0.3),
-              z: (i - 1) * cm(1.9),
-              rotacao: [0, (aleatorio() - 0.5) * 0.4, 0],
+            peca(g, material(C.bacon, 'grelhado'), {
+              y: y + cm(0.34),
+              z: (i - 1) * cm(2),
+              rotacao: [0, (aleatorio() - 0.5) * 0.34, 0],
             }),
           );
         }
-        y += cm(0.7);
+        y += cm(0.75);
         break;
       }
       case 'alface': {
-        for (let i = 0; i < 3; i += 1) {
+        for (let i = 0; i < 2; i += 1) {
           grupo.add(
-            peca(folhaDeAlface(raio * 0.98, i * 2.1), material(CORES.alface, { roughness: 0.58, receita: 'folha', relevo: 1.33 }), {
-              y: y + cm(0.25) + i * cm(0.12),
-              rotacao: [0, (i / 3) * TAU, 0],
-            }),
+            peca(
+              coroaDeAlface(raio * 0.5, raio * (1.16 - i * 0.06), i * 2.4),
+              material(C.alface, 'folha'),
+              { y: y + cm(0.3) + i * cm(0.3), rotacao: [0, i * 0.9, 0] },
+            ),
           );
         }
-        y += cm(0.85);
+        y += cm(0.95);
         break;
       }
       case 'tomate': {
-        const altura = cm(0.65);
-        grupo.add(peca(rodelaDeTomate(raio * 0.88, altura), material(CORES.tomate, { roughness: 0.34, receita: 'liso', relevo: 0.76 }), { y }));
+        const altura = cm(0.7);
+        grupo.add(peca(rodelaDeTomate(raio * 0.9, altura), material(C.tomate, 'molhado'), { y }));
         y += altura;
         break;
       }
       case 'cebola': {
-        const g = new THREE.TorusGeometry(raio * 0.66, cm(0.32), 10, 40);
+        const g = new THREE.TorusGeometry(raio * 0.68, cm(0.34), 12, 44);
         g.rotateX(Math.PI / 2);
-        deformar(g, { amplitude: cm(0.06), frequencia: 45, semente: 33 });
-        granular(g, 0.14, 55);
-        grupo.add(peca(g, material(CORES.cebola, { roughness: 0.5, receita: 'liso', relevo: 0.95 }), { y: y + cm(0.34) }));
-        y += cm(0.7);
+        granular(g, 0.1, 55);
+        grupo.add(peca(g, material(C.cebola, 'molhado'), { y: y + cm(0.36) }));
+        y += cm(0.72);
         break;
       }
       default:
@@ -266,25 +317,25 @@ export function construirHamburguer({ raio, camadas }) {
     }
   }
 
-  const alturaTopo = raio * 0.78;
-  grupo.add(peca(paoSuperior(raio, alturaTopo), material(CORES.paoTopo, { roughness: 0.88, receita: 'pao', relevo: 1.71 }), { y }));
+  // Cúpula mais baixa que a versão anterior: `raio * 0.78` deixava o pão com
+  // cara de bola e empurrava a altura total muito acima da que o cardápio
+  // anuncia. Brioche real fica perto de metade do raio.
+  const alturaTopo = raio * 0.58;
+  grupo.add(peca(paoSuperior(raio, alturaTopo), material(C.paoTopo, 'brioche'), { y }));
 
-  // Gergelim assentado na curvatura do pão, não flutuando sobre ela
-  const gergelim = new THREE.SphereGeometry(cm(0.17), 8, 6);
-  gergelim.scale(1.5, 0.62, 1);
-  granular(gergelim, 0.1, 90);
-  const matGergelim = material(CORES.gergelim, { roughness: 0.5 });
+  const gergelim = new THREE.SphereGeometry(cm(0.19), 8, 6);
+  gergelim.scale(1.45, 0.6, 1);
+  const matGergelim = material(C.gergelim, 'semente');
 
-  for (let i = 0; i < 22; i += 1) {
+  for (let i = 0; i < 26; i += 1) {
+    // Espiral de Vogel: distribui sem aglomerar e sem sortear posição
     const angulo = i * 2.399;
-    const t = Math.sqrt(aleatorio()) * 0.82;
-    const r = raio * t;
-    const alturaNoPonto = alturaTopo * Math.sqrt(Math.max(0, 1 - t * t * 0.94));
+    const u = Math.sqrt(aleatorio()) * 0.86;
     grupo.add(
       peca(gergelim, matGergelim, {
-        x: Math.cos(angulo) * r,
-        z: Math.sin(angulo) * r,
-        y: y + alturaNoPonto - cm(0.06),
+        x: Math.cos(angulo) * raio * u,
+        z: Math.sin(angulo) * raio * u,
+        y: y + alturaTopo * alturaDoDomo(u) - cm(0.05),
         rotacao: [0, angulo, 0],
       }),
     );
@@ -302,121 +353,129 @@ export function construirPizza({ raioCm, cobertura }) {
   const raio = cm(raioCm);
   const aleatorio = sorteio(90210);
 
-  // Massa: disco de borda irregular, como massa aberta à mão
-  const massa = disco(raio, cm(0.7), { segmentos: 64 });
-  deformar(massa, { amplitude: cm(0.09), frequencia: 14, semente: 5 });
-  granular(massa, 0.12, 40);
-  grupo.add(peca(massa, material(CORES.massa, { roughness: 0.9, receita: 'massa', relevo: 1.52 })));
+  const massa = disco(raio, cm(0.75), { segmentos: 72 });
+  ondular(massa, { ondas: 11, amplitude: 0.008 });
+  granular(massa, 0.08, 40);
+  grupo.add(peca(massa, material(C.massa, 'pao')));
 
-  // Borda com bolhas e manchas de leopardo — a assinatura da massa fermentada
-  const borda = new THREE.TorusGeometry(raio * 0.925, cm(1.25), 14, 72);
+  // Borda: toro com manchas de leopardo desenhadas como pontos discretos, e
+  // não como gradiente de ruído. O ponto separado lê como bolha queimada; o
+  // gradiente lia como encardido.
+  const borda = new THREE.TorusGeometry(raio * 0.92, cm(1.35), 16, 80);
   borda.rotateX(Math.PI / 2);
-  deformar(borda, { amplitude: cm(0.22), frequencia: 20, oitavas: 4, semente: 17 });
+  ondular(borda, { ondas: 13, amplitude: 0.01 });
   pintar(borda, (x, y, z) => {
-    const mancha = fbm(x * 55, y * 55, z * 55, 2);
-    // Pontos bem escuros e esparsos, não um gradiente uniforme
-    const leopardo = mancha > 0.62 ? 1 - (mancha - 0.62) * 1.9 : 1;
-    const topo = y > 0 ? 1 - y * 1.6 : 1;
-    return Math.max(0.42, leopardo * topo) * (0.96 + mancha * 0.12);
+    const angulo = Math.atan2(z, x);
+    // Pontos de queima espaçados de forma irregular mas determinística
+    const pulso = Math.sin(angulo * 17) * Math.sin(angulo * 6.3 + 1.7);
+    const queimado = pulso > 0.55 && y > -cm(0.2) ? 0.5 : 1;
+    const topo = y > 0 ? 1 + y * 2.2 : 1;
+    return queimado * topo;
   });
-  grupo.add(peca(borda, material(CORES.borda, { roughness: 0.87, receita: 'massa', relevo: 2.28 }), { y: cm(1.0) }));
+  grupo.add(peca(borda, material(C.borda, 'pao'), { y: cm(1.05) }));
 
-  const molho = disco(raio * 0.9, cm(0.22), { segmentos: 56 });
-  granular(molho, 0.16, 50);
-  grupo.add(peca(molho, material(CORES.molho, { roughness: 0.45, receita: 'liso', relevo: 0.95 }), { y: cm(0.68) }));
-
-  // Muçarela: camada irregular, com poças mais douradas onde gratinou
-  const queijo = new THREE.CircleGeometry(raio * 0.885, 56);
-  queijo.rotateX(-Math.PI / 2);
-  const pos = queijo.attributes.position;
-  for (let i = 0; i < pos.count; i += 1) {
-    const x = pos.getX(i);
-    const z = pos.getZ(i);
-    pos.setY(i, fbm(x * 70, 0, z * 70, 3) * cm(0.32));
-  }
-  pos.needsUpdate = true;
-  queijo.computeVertexNormals();
-  pintar(queijo, (x, y, z) => {
-    const gratinado = fbm(x * 48, 0, z * 48, 2);
-    const dourado = gratinado > 0.6 ? 1 + (gratinado - 0.6) * 1.4 : 1;
-    return [dourado, dourado * 0.94, dourado * 0.78];
-  });
-  grupo.add(peca(queijo, material(CORES.mucarela, { roughness: 0.34, receita: 'queijo', relevo: 1.33 }), { y: cm(0.9) }));
+  const molho = disco(raio * 0.9, cm(0.24), { segmentos: 60 });
+  granular(molho, 0.1, 50);
+  grupo.add(peca(molho, material(C.molho, 'molhado'), { y: cm(0.72) }));
 
   if (cobertura === 'margherita') {
-    // Folha de manjericão com nervura, não uma esfera achatada
-    const folha = new THREE.PlaneGeometry(cm(4.4), cm(2.6), 8, 4);
-    folha.rotateX(-Math.PI / 2);
-    const fp = folha.attributes.position;
-    for (let i = 0; i < fp.count; i += 1) {
-      const x = fp.getX(i) / cm(2.2);
-      const z = fp.getZ(i) / cm(1.3);
-      // Contorno de folha: estreita nas pontas, dobrada na nervura central
-      fp.setX(i, fp.getX(i));
-      fp.setZ(i, fp.getZ(i) * (1 - x * x) * 1.05);
-      fp.setY(i, Math.abs(z) * cm(0.28) + (1 - x * x) * cm(0.06));
+    // Bolotas de búfala achatadas pelo forno, espalhadas sobre o molho. Poças
+    // separadas lêem muito melhor que um lençol de queijo cobrindo tudo.
+    const bolota = girar(
+      [
+        [cm(1.9), 0],
+        [cm(2.0), cm(0.28)],
+        [cm(1.82), cm(0.66)],
+        [cm(1.1), cm(0.86)],
+        [0, cm(0.9)],
+      ],
+      24,
+    );
+    ondular(bolota, { ondas: 5, amplitude: 0.05 });
+    granular(bolota, 0.09, 60);
+    const matBolota = material(C.mucarela, 'derretido');
+    for (let i = 0; i < 8; i += 1) {
+      const angulo = i * 2.399 + 0.4;
+      const r = raio * (0.16 + (i % 3) * 0.26);
+      grupo.add(peca(bolota, matBolota, { x: Math.cos(angulo) * r, z: Math.sin(angulo) * r, y: cm(0.94) }));
     }
-    fp.needsUpdate = true;
-    folha.computeVertexNormals();
-    pintar(folha, (x, y, z) => (Math.abs(z) < cm(0.12) ? 1.28 : 0.95 + fbm(x * 90, 0, z * 90) * 0.16));
-    const matFolha = material(CORES.manjericao, { roughness: 0.5, receita: 'folha', relevo: 1.14 });
 
+    const folha = folhaDeManjericao();
+    const matFolha = material(C.manjericao, 'folha');
     for (let i = 0; i < 9; i += 1) {
       const angulo = aleatorio() * TAU;
-      const r = raio * (0.18 + aleatorio() * 0.58);
+      const r = raio * (0.18 + aleatorio() * 0.56);
       grupo.add(
         peca(folha, matFolha, {
           x: Math.cos(angulo) * r,
           z: Math.sin(angulo) * r,
-          y: cm(1.16),
+          y: cm(1.5),
           rotacao: [0, aleatorio() * TAU, 0],
         }),
       );
     }
-
-    // Bolotas de búfala, achatadas pelo forno
-    const bolota = new THREE.SphereGeometry(cm(1.7), 18, 12);
-    bolota.scale(1, 0.42, 1);
-    deformar(bolota, { amplitude: cm(0.12), frequencia: 30, semente: 61 });
-    granular(bolota, 0.12, 60);
-    const matBolota = material(CORES.mucarela, { roughness: 0.32, receita: 'queijo', relevo: 1.14 });
-    for (let i = 0; i < 7; i += 1) {
-      const angulo = i * 2.399 + 0.4;
-      const r = raio * (0.2 + (i % 3) * 0.24);
-      grupo.add(peca(bolota, matBolota, { x: Math.cos(angulo) * r, z: Math.sin(angulo) * r, y: cm(1.1) }));
-    }
   } else {
-    // Pepperoni encardido: a fatia encolhe e vira uma tigelinha no forno
+    // Muçarela gratinada em lençol, porque a pepperoni fica por cima dela
+    const queijo = new THREE.CircleGeometry(raio * 0.885, 60);
+    queijo.rotateX(-Math.PI / 2);
+    const pos = queijo.attributes.position;
+    for (let i = 0; i < pos.count; i += 1) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      pos.setY(i, fbm(x * 40, 0, z * 40, 2) * cm(0.2));
+    }
+    pos.needsUpdate = true;
+    queijo.computeVertexNormals();
+    granular(queijo, 0.14, 34);
+    grupo.add(peca(queijo, material(C.mucarela, 'derretido'), { y: cm(0.92) }));
+
+    // A fatia encolhe no forno e vira uma tigelinha com a borda mais escura
     const fatia = girar(
       [
         [cm(2.05), 0],
-        [cm(2.1), cm(0.18)],
-        [cm(1.95), cm(0.42)],
-        [cm(1.5), cm(0.34)],
-        [0, cm(0.3)],
+        [cm(2.15), cm(0.2)],
+        [cm(2.0), cm(0.46)],
+        [cm(1.5), cm(0.36)],
+        [0, cm(0.32)],
       ],
-      26,
+      28,
     );
-    deformar(fatia, { amplitude: cm(0.04), frequencia: 60, semente: 9 });
+    ondular(fatia, { ondas: 7, amplitude: 0.03 });
     pintar(fatia, (x, y, z) => {
       const distancia = Math.hypot(x, z) / cm(2.1);
-      const bordaEscura = distancia > 0.82 ? 0.68 : 1;
-      const gordura = fbm(x * 130, y * 130, z * 130) > 0.66 ? 1.35 : 1;
-      return bordaEscura * gordura;
+      return distancia > 0.84 ? 0.62 : 1;
     });
-    const matFatia = material(CORES.pepperoni, { roughness: 0.38, receita: 'carne', relevo: 1.33 });
+    const matFatia = material(C.pepperoni, 'grelhado');
 
     for (let anel = 0; anel < 3; anel += 1) {
       const quantidade = 5 + anel * 4;
       for (let i = 0; i < quantidade; i += 1) {
         const angulo = (i / quantidade) * TAU + anel * 0.7;
         const r = raio * (0.2 + anel * 0.29);
-        grupo.add(peca(fatia, matFatia, { x: Math.cos(angulo) * r, z: Math.sin(angulo) * r, y: cm(1.06) }));
+        grupo.add(peca(fatia, matFatia, { x: Math.cos(angulo) * r, z: Math.sin(angulo) * r, y: cm(1.1) }));
       }
     }
   }
 
   return grupo;
+}
+
+/** Folha de manjericão: contorno de amêndoa, dobrada na nervura central. */
+function folhaDeManjericao() {
+  const g = new THREE.PlaneGeometry(cm(4.6), cm(2.8), 10, 4);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i += 1) {
+    const x = p.getX(i) / cm(2.3);
+    const z = p.getZ(i);
+    // Estreita nas duas pontas e dobra em V ao longo do comprimento
+    p.setZ(i, z * (1 - x * x) * 1.08);
+    p.setY(i, Math.abs(p.getZ(i)) * 0.24 + (1 - x * x) * cm(0.08));
+  }
+  p.needsUpdate = true;
+  g.computeVertexNormals();
+  pintar(g, (x, y, z) => (Math.abs(z) < cm(0.14) ? [1.3, 1.34, 1.2] : [1, 1, 1]));
+  return duasFaces(g);
 }
 
 /* =========================================================================
@@ -427,7 +486,6 @@ export function construirBatata() {
   const grupo = new THREE.Group();
   const aleatorio = sorteio(777);
 
-  // Cone de papel encerado, com dobras
   const cone = girar(
     [
       [cm(3.3), 0],
@@ -438,33 +496,26 @@ export function construirBatata() {
     ],
     7,
   );
-  deformar(cone, { amplitude: cm(0.1), frequencia: 22, semente: 2 });
-  granular(cone, 0.14, 30);
-  const matPapel = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(CORES.papel),
-    roughness: 0.92,
-    vertexColors: true,
-    side: THREE.DoubleSide,
-  });
-  grupo.add(peca(cone, matPapel));
+  granular(cone, 0.1, 30);
+  grupo.add(peca(duasFaces(cone), material(C.papel, 'papel')));
 
   const fundo = disco(cm(3.3), cm(0.35), { segmentos: 7 });
-  granular(fundo, 0.1, 30);
-  grupo.add(peca(fundo, material(CORES.papel, { roughness: 0.94, receita: 'liso', relevo: 0.76 })));
+  granular(fundo, 0.08, 30);
+  grupo.add(peca(fundo, material(C.papel, 'papel')));
 
-  const matBatata = material(CORES.batata, { roughness: 0.58, receita: 'batata', relevo: 1.52 });
+  const matBatata = material(C.batata, 'crocante');
 
-  for (let i = 0; i < 22; i += 1) {
+  for (let i = 0; i < 24; i += 1) {
     const comprimento = cm(6.5 + aleatorio() * 3.5);
-    const lado = cm(0.7 + aleatorio() * 0.22);
+    const lado = cm(0.72 + aleatorio() * 0.22);
 
-    const g = new RoundedBoxGeometry(lado, comprimento, lado, 1, lado * 0.3);
-    deformar(g, { amplitude: cm(0.035), frequencia: 34, semente: i * 3 });
+    // Aresta viva com um chanfro pequeno: batata palito é cortada, não moldada
+    const g = new RoundedBoxGeometry(lado, comprimento, lado, 1, lado * 0.16);
     pintar(g, (x, y) => {
-      // As pontas tostam mais que o meio
+      // As pontas tostam mais que o meio, com transição curta
       const ponta = Math.abs(y) / (comprimento / 2);
-      const tostado = 1 - Math.pow(ponta, 3) * 0.42;
-      return [tostado, tostado * 0.95, tostado * 0.82];
+      const tostado = ponta > 0.72 ? 1 - (ponta - 0.72) / 0.28 * 0.4 : 1;
+      return [tostado, tostado * 0.95, tostado * 0.8];
     });
 
     const angulo = i * 2.399;
@@ -474,7 +525,7 @@ export function construirBatata() {
         x: Math.cos(angulo) * raio,
         z: Math.sin(angulo) * raio,
         y: cm(6.4) + comprimento / 2 - cm(1.6),
-        rotacao: [(aleatorio() - 0.5) * 0.34, angulo, (aleatorio() - 0.5) * 0.34],
+        rotacao: [(aleatorio() - 0.5) * 0.3, angulo, (aleatorio() - 0.5) * 0.3],
       }),
     );
   }
@@ -488,24 +539,25 @@ export function construirBatata() {
 
 export function construirAneis() {
   const grupo = new THREE.Group();
-  const matEmpanado = material(CORES.empanado, { roughness: 0.85, receita: 'empanado', relevo: 2.5 });
+  const matEmpanado = material(C.empanado, 'crocante');
 
   const pilha = [
-    { y: cm(1.1), raio: cm(4.4), inclinacao: 0.05, semente: 1 },
-    { y: cm(2.8), raio: cm(4.0), inclinacao: 0.16, semente: 2 },
-    { y: cm(4.5), raio: cm(4.3), inclinacao: -0.12, semente: 3 },
-    { y: cm(6.2), raio: cm(3.8), inclinacao: 0.2, semente: 4 },
+    { y: cm(1.15), raio: cm(4.4), inclinacao: 0.05, semente: 1 },
+    { y: cm(2.85), raio: cm(4.0), inclinacao: 0.16, semente: 2 },
+    { y: cm(4.55), raio: cm(4.3), inclinacao: -0.12, semente: 3 },
+    { y: cm(6.25), raio: cm(3.8), inclinacao: 0.2, semente: 4 },
   ];
 
   for (const [indice, anel] of pilha.entries()) {
     const g = new THREE.TorusGeometry(anel.raio, cm(1.15), 14, 40);
     g.rotateX(Math.PI / 2);
-    // Amplitude alta: farinha de rosca é grosseira e irregular
-    deformar(g, { amplitude: cm(0.16), frequencia: 34, oitavas: 4, semente: anel.semente * 13 });
-    pintar(g, (x, y, z) => {
-      const crocante = fbm(x * 100, y * 100, z * 100, 3);
-      return 0.86 + crocante * 0.34;
-    });
+    // Aqui o ruído fica: a farinha de rosca é irregular por definição, e é
+    // justamente o grosseiro da superfície que diz "empanado" ao olho.
+    deformar(g, { amplitude: cm(0.15), frequencia: 34, oitavas: 4, semente: anel.semente * 13 });
+    // Faixa larga de propósito: farinha de rosca frita tem pedaço quase
+    // branco ao lado de pedaço quase queimado. Variação estreita devolvia um
+    // anel de cor única, com cara de rosquinha crua.
+    pintar(g, (x, y, z) => 0.74 + fbm(x * 100, y * 100, z * 100, 3) * 0.62);
 
     grupo.add(
       peca(g, matEmpanado, {
@@ -534,49 +586,46 @@ function pratoDeLouca(raio) {
       [raio * 0.8, cm(0.5)],
       [0, cm(0.42)],
     ],
-    48,
+    56,
   );
-  granular(g, 0.05, 30);
+  granular(g, 0.03, 30);
   return g;
 }
 
-/** Bola de sorvete com a superfície granulada de quem acabou de sair da colher. */
+/** Bola de sorvete: superfície de colher, sem reflexo especular. */
 function bolaDeSorvete(raio, cor, semente) {
-  const g = new THREE.SphereGeometry(raio, 26, 20);
+  const g = new THREE.SphereGeometry(raio, 28, 20);
   g.scale(1, 0.92, 1);
-  deformar(g, { amplitude: raio * 0.09, frequencia: 26, oitavas: 3, semente });
-  granular(g, 0.13, 55);
-  return peca(g, material(cor, { roughness: 0.5, receita: 'miolo', relevo: 2.09 }), { y: raio * 0.86 });
+  ondular(g, { ondas: 6, amplitude: 0.05, fase: semente });
+  granular(g, 0.09, 55);
+  return peca(g, material(cor, 'cremoso'), { y: raio * 0.86 });
 }
 
 export function construirBrownie() {
   const grupo = new THREE.Group();
-  grupo.add(peca(pratoDeLouca(cm(9)), material(CORES.louca, { roughness: 0.22, receita: 'liso', relevo: 0.47 })));
+  grupo.add(peca(pratoDeLouca(cm(9)), material(C.louca, 'ceramica')));
 
-  // Bolo com o topo rachado, como brownie assado de verdade
-  const bolo = new RoundedBoxGeometry(cm(7), cm(3.6), cm(6.2), 4, cm(0.28));
-  deformar(bolo, { amplitude: cm(0.11), frequencia: 26, oitavas: 4, semente: 44 });
+  const bolo = new RoundedBoxGeometry(cm(7), cm(3.6), cm(6.2), 4, cm(0.3));
+  // Ruído mantido: a casca de brownie racha, e a rachadura é o sinal de que
+  // assou. Só na cor, para não arredondar as arestas do corte.
   pintar(bolo, (x, y, z) => {
-    const topo = y > cm(1.2);
+    const topo = y > cm(1.3);
+    if (!topo) return 0.95;
     const fissura = fbm(x * 45, 0, z * 45, 2);
-    // A crosta do topo é bem mais clara que o miolo
-    if (topo) return fissura > 0.52 ? 1.42 : 1.12;
-    return 0.9 + fissura * 0.2;
+    return fissura > 0.52 ? 1.55 : 1.15;
   });
-  grupo.add(peca(bolo, material(CORES.chocolate, { roughness: 0.7, receita: 'chocolate', relevo: 1.9 }), { x: cm(-1.4), y: cm(2.25) }));
+  grupo.add(peca(bolo, material(C.chocolate, 'pao'), { x: cm(-1.4), y: cm(2.25) }));
 
-  const sorvete = bolaDeSorvete(cm(2.5), CORES.baunilha, 12);
+  const sorvete = bolaDeSorvete(cm(2.5), C.baunilha, 12);
   sorvete.position.set(cm(4.2), cm(2.6), cm(0.4));
   grupo.add(sorvete);
 
-  // Calda escorrendo pela lateral do bolo
-  const matCalda = material(CORES.calda, { roughness: 0.18, receita: 'liso', relevo: 0.76 });
+  // Calda escorrendo pela lateral, envernizada
+  const matCalda = material(C.calda, 'molhado');
   const aleatorio = sorteio(31);
   for (let i = 0; i < 7; i += 1) {
     const comprimento = cm(1.2 + aleatorio() * 2.4);
-    const g = new THREE.CapsuleGeometry(cm(0.34), comprimento, 4, 10);
-    deformar(g, { amplitude: cm(0.05), frequencia: 40, semente: i * 7 });
-    granular(g, 0.1, 60);
+    const g = new THREE.CapsuleGeometry(cm(0.36), comprimento, 4, 12);
     grupo.add(
       peca(g, matCalda, {
         x: cm(-4.6) + i * cm(1.1),
@@ -591,7 +640,7 @@ export function construirBrownie() {
 
 export function construirPetitGateau() {
   const grupo = new THREE.Group();
-  grupo.add(peca(pratoDeLouca(cm(7.5)), material(CORES.louca, { roughness: 0.22, receita: 'liso', relevo: 0.47 })));
+  grupo.add(peca(pratoDeLouca(cm(7.5)), material(C.louca, 'ceramica')));
 
   const bolo = girar(
     [
@@ -602,22 +651,22 @@ export function construirPetitGateau() {
       [cm(2.9), cm(3.6)],
       [0, cm(3.5)],
     ],
-    36,
+    40,
   );
-  deformar(bolo, { amplitude: cm(0.08), frequencia: 28, semente: 55 });
-  pintar(bolo, (x, y) => (y > cm(3.2) ? 1.2 : 0.94 + fbm(x * 60, y * 60, 0) * 0.16));
-  grupo.add(peca(bolo, material(CORES.chocolate, { roughness: 0.66, receita: 'chocolate', relevo: 1.71 }), { y: cm(0.42) }));
+  ondular(bolo, { ondas: 8, amplitude: 0.012 });
+  pintar(bolo, (x, y) => (y > cm(3.2) ? 1.3 : 1));
+  grupo.add(peca(bolo, material(C.chocolate, 'pao'), { y: cm(0.42) }));
 
-  const sorvete = bolaDeSorvete(cm(2.2), CORES.baunilha, 88);
+  const sorvete = bolaDeSorvete(cm(2.2), C.baunilha, 88);
   sorvete.position.set(cm(4.0), cm(2.2), 0);
   grupo.add(sorvete);
 
-  const matFruta = material(CORES.morango, { roughness: 0.34, receita: 'liso', relevo: 0.95 });
+  const matFruta = material(C.morango, 'molhado');
   const aleatorio = sorteio(5150);
   for (let i = 0; i < 4; i += 1) {
-    const g = new THREE.SphereGeometry(cm(0.85), 14, 10);
-    deformar(g, { amplitude: cm(0.07), frequencia: 40, semente: i * 11 });
-    granular(g, 0.12, 70);
+    const g = new THREE.SphereGeometry(cm(0.85), 16, 12);
+    g.scale(1, 1.15, 1);
+    granular(g, 0.08, 70);
     const angulo = i * 1.9;
     grupo.add(
       peca(g, matFruta, {
@@ -637,9 +686,30 @@ export function construirPetitGateau() {
 
 function copo(perfilExterno, espessura = cm(0.22)) {
   const interno = perfilExterno.map(([r, y]) => [Math.max(r - espessura, 0.0005), y]);
-  const g = girar([...perfilExterno, ...interno.reverse()], 48);
-  granular(g, 0.03, 20);
+  const g = girar([...perfilExterno, ...interno.reverse()], 56);
+  granular(g, 0.02, 20);
   return g;
+}
+
+/**
+ * Vidro.
+ *
+ * Fica como material próprio, e não na tabela de acabamentos, porque depende de
+ * transparência — e transparência tem regra de ordenação e de face que os
+ * outros acabamentos não têm.
+ */
+function vidro(opacidade) {
+  return new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(C.vidro),
+    roughness: 0.04,
+    metalness: 0,
+    clearcoat: 1,
+    clearcoatRoughness: 0.02,
+    transparent: true,
+    opacity: opacidade,
+    vertexColors: true,
+    side: THREE.DoubleSide,
+  });
 }
 
 export function construirMilkshake() {
@@ -654,20 +724,11 @@ export function construirMilkshake() {
     [cm(4.2), altura],
   ];
 
-  const matVidro = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(CORES.vidro),
-    roughness: 0.06,
-    metalness: 0.02,
-    transparent: true,
-    opacity: 0.28,
-    vertexColors: true,
-    side: THREE.DoubleSide,
-  });
+  const matVidro = vidro(0.3);
   grupo.add(peca(copo(perfil), matVidro));
 
-  // Base maciça: o copo de milkshake tem fundo pesado
-  const base = disco(cm(2.9), cm(0.9), { segmentos: 48 });
-  granular(base, 0.04, 25);
+  const base = disco(cm(2.9), cm(0.9), { segmentos: 56 });
+  granular(base, 0.03, 25);
   grupo.add(peca(base, matVidro));
 
   const bebida = girar(
@@ -678,33 +739,36 @@ export function construirMilkshake() {
       [cm(3.98), altura * 0.9],
       [0, altura * 0.9],
     ],
-    44,
+    52,
   );
-  granular(bebida, 0.09, 40);
-  grupo.add(peca(bebida, material(CORES.morango, { roughness: 0.42, receita: 'liso', relevo: 0.76 })));
+  granular(bebida, 0.06, 40);
+  grupo.add(peca(bebida, material(C.morango, 'cremoso')));
 
-  // Chantilly em espiral, feito com um tubo — a forma que sai do bico
+  // Chantilly em espiral: a forma que sai do bico do saco de confeitar
   const caminho = [];
-  const voltas = 3.2;
   const passos = 120;
   for (let i = 0; i <= passos; i += 1) {
     const t = i / passos;
-    const angulo = t * TAU * voltas;
+    const angulo = t * TAU * 3.2;
     const raio = cm(3.3) * (1 - t * 0.86);
     caminho.push(new THREE.Vector3(Math.cos(angulo) * raio, altura * 0.9 + t * cm(4.6), Math.sin(angulo) * raio));
   }
-  const espiral = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(caminho), 130, cm(0.95), 12, false);
-  deformar(espiral, { amplitude: cm(0.05), frequencia: 50, semente: 71 });
-  granular(espiral, 0.09, 60);
-  grupo.add(peca(espiral, material(CORES.baunilha, { roughness: 0.55, receita: 'miolo', relevo: 1.33 })));
+  const espiral = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(caminho), 140, cm(0.98), 14, false);
+  granular(espiral, 0.07, 60);
+  grupo.add(peca(espiral, material(C.baunilha, 'cremoso')));
 
-  const cereja = new THREE.SphereGeometry(cm(0.95), 16, 12);
-  granular(cereja, 0.1, 70);
-  grupo.add(peca(cereja, material('#B3202C', { roughness: 0.3 }), { y: altura * 0.9 + cm(5.4) }));
+  const cereja = new THREE.SphereGeometry(cm(0.95), 18, 14);
+  grupo.add(peca(cereja, material(C.cereja, 'molhado'), { y: altura * 0.9 + cm(5.4) }));
 
-  const canudo = new THREE.CylinderGeometry(cm(0.42), cm(0.42), cm(9.5), 14);
-  granular(canudo, 0.06, 40);
-  grupo.add(peca(canudo, material('#D8433C', { roughness: 0.35 }), { x: cm(1.5), y: altura + cm(2.4), z: cm(0.7), rotacao: [0, 0, 0.3] }));
+  const canudo = new THREE.CylinderGeometry(cm(0.42), cm(0.42), cm(9.5), 16);
+  grupo.add(
+    peca(canudo, material(C.canudo, 'ceramica'), {
+      x: cm(1.5),
+      y: altura + cm(2.4),
+      z: cm(0.7),
+      rotacao: [0, 0, 0.3],
+    }),
+  );
 
   return grupo;
 }
@@ -720,18 +784,11 @@ export function construirRefrigerante() {
     [cm(3.85), altura],
   ];
 
-  const matVidro = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(CORES.vidro),
-    roughness: 0.05,
-    transparent: true,
-    opacity: 0.24,
-    vertexColors: true,
-    side: THREE.DoubleSide,
-  });
+  const matVidro = vidro(0.26);
   grupo.add(peca(copo(perfil, cm(0.2)), matVidro));
 
-  const base = disco(cm(2.85), cm(0.7), { segmentos: 48 });
-  granular(base, 0.04, 25);
+  const base = disco(cm(2.85), cm(0.7), { segmentos: 56 });
+  granular(base, 0.03, 25);
   grupo.add(peca(base, matVidro));
 
   const liquido = girar(
@@ -741,25 +798,29 @@ export function construirRefrigerante() {
       [cm(3.66), altura * 0.86],
       [0, altura * 0.86],
     ],
-    44,
+    52,
   );
-  granular(liquido, 0.07, 40);
+  granular(liquido, 0.05, 40);
   grupo.add(
     peca(
       liquido,
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(CORES.refri),
-        roughness: 0.16,
+      new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(C.refri),
+        roughness: 0.1,
+        clearcoat: 1,
+        clearcoatRoughness: 0.04,
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.94,
         vertexColors: true,
       }),
     ),
   );
 
-  const matGelo = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(CORES.gelo),
-    roughness: 0.08,
+  const matGelo = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(C.gelo),
+    roughness: 0.06,
+    clearcoat: 1,
+    clearcoatRoughness: 0.03,
     transparent: true,
     opacity: 0.55,
     vertexColors: true,
@@ -767,9 +828,8 @@ export function construirRefrigerante() {
   const aleatorio = sorteio(2024);
   for (let i = 0; i < 6; i += 1) {
     const lado = cm(1.7 + aleatorio() * 0.4);
-    const g = new RoundedBoxGeometry(lado, lado, lado, 1, lado * 0.22);
-    deformar(g, { amplitude: cm(0.05), frequencia: 30, semente: i * 17 });
-    granular(g, 0.07, 50);
+    const g = new RoundedBoxGeometry(lado, lado, lado, 1, lado * 0.16);
+    granular(g, 0.05, 50);
     const angulo = i * 1.9;
     grupo.add(
       peca(g, matGelo, {
@@ -794,15 +854,15 @@ export function construirCostela() {
 
   const tabua = new RoundedBoxGeometry(cm(24), cm(1.6), cm(17), 3, cm(0.25));
   pintar(tabua, (x, y, z) => {
-    // Veio da madeira: listras finas ao longo do comprimento
-    const veio = Math.sin(z * 90 + fbm(x * 12, 0, z * 12) * 6) * 0.5 + 0.5;
-    return 0.9 + veio * 0.22;
+    // Veio da madeira: listras finas e paralelas, desenhadas e não sorteadas
+    const veio = Math.sin(z * 90 + Math.sin(x * 14) * 1.6) * 0.5 + 0.5;
+    return 0.9 + veio * 0.2;
   });
-  grupo.add(peca(tabua, material(CORES.madeira, { roughness: 0.62, receita: 'madeira', relevo: 1.33 }), { y: cm(0.8) }));
+  grupo.add(peca(tabua, material(C.madeira, 'madeira'), { y: cm(0.8) }));
 
   for (let i = 0; i < 4; i += 1) {
-    // Costela: perfil girado e depois esticado ao longo de X, que e o
-    // comprimento da peca. As quatro ficam lado a lado em Z, sobre a tabua.
+    // Costela: perfil girado e depois esticado ao longo de X, que é o
+    // comprimento da peça. As quatro ficam lado a lado em Z, sobre a tábua.
     const comprimento = cm(16.5);
     const g = girar(
       [
@@ -812,24 +872,24 @@ export function construirCostela() {
         [cm(1.3), cm(3.1)],
         [0, cm(3.25)],
       ],
-      18,
+      20,
     );
     g.rotateZ(Math.PI / 2);
     g.scale(comprimento / cm(3.4), 1, 1);
     // O perfil girado nasce apoiado numa das pontas; centralizar evita que a
-    // costela ultrapasse a tabua de um lado so.
+    // costela ultrapasse a tábua de um lado só.
     g.computeBoundingBox();
     g.translate(-(g.boundingBox.min.x + g.boundingBox.max.x) / 2, 0, 0);
-    deformar(g, { amplitude: cm(0.12), frequencia: 22, oitavas: 4, semente: i * 23 });
-    pintar(g, (x, y, z) => {
-      const glaceado = fbm(x * 34, y * 34, z * 34, 3);
-      // Glace brilhante com pontos carbonizados
-      const carbonizado = glaceado > 0.68 ? 0.55 : 1;
-      return carbonizado * (0.88 + glaceado * 0.3);
+
+    pintar(g, (x) => {
+      // Anéis de glace ao longo do osso, com pontos carbonizados regulares
+      const faixa = Math.sin(x * 42) * 0.5 + 0.5;
+      const carbonizado = faixa > 0.78 ? 0.6 : 1;
+      return carbonizado * (0.94 + faixa * 0.18);
     });
 
     grupo.add(
-      peca(g, material(CORES.costela, { roughness: 0.32, receita: 'carne', relevo: 2.28 }), {
+      peca(g, material(C.costela, 'molhado'), {
         y: cm(1.6) + cm(1.7),
         z: cm(-5.4) + i * cm(3.6),
         x: (aleatorio() - 0.5) * cm(1.4),
@@ -856,27 +916,17 @@ export function construirSalada() {
       [cm(7.3), cm(2.8)],
       [cm(4.1), cm(0.5)],
     ],
-    48,
+    56,
   );
-  granular(tigela, 0.06, 25);
-  grupo.add(
-    peca(
-      tigela,
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(CORES.tigela),
-        roughness: 0.34,
-        vertexColors: true,
-        side: THREE.DoubleSide,
-      }),
-    ),
-  );
+  granular(tigela, 0.04, 25);
+  grupo.add(peca(duasFaces(tigela), material(C.tigela, 'ceramica')));
 
   // Folhas de romana: compridas, dobradas ao meio, com nervura clara
-  const matFolha = material(CORES.folha, { roughness: 0.52, receita: 'folha', relevo: 1.33 });
-  for (let i = 0; i < 13; i += 1) {
+  const matFolha = material(C.folha, 'folha');
+  for (let i = 0; i < 14; i += 1) {
     const comprimento = cm(5 + aleatorio() * 3.5);
     const largura = cm(2.2 + aleatorio() * 1.4);
-    const g = new THREE.PlaneGeometry(comprimento, largura, 8, 4);
+    const g = new THREE.PlaneGeometry(comprimento, largura, 10, 4);
     g.rotateX(-Math.PI / 2);
 
     const pos = g.attributes.position;
@@ -885,19 +935,16 @@ export function construirSalada() {
       const z = pos.getZ(v) / (largura / 2);
       pos.setZ(v, pos.getZ(v) * (1 - x * x * 0.55));
       // Dobra em V ao longo da nervura + ondulação na borda
-      pos.setY(v, Math.abs(z) * largura * 0.34 + Math.sin(x * 5 + i) * cm(0.22));
+      pos.setY(v, Math.abs(z) * largura * 0.36 + Math.sin(x * 5 + i) * cm(0.24));
     }
     pos.needsUpdate = true;
     g.computeVertexNormals();
-    pintar(g, (x, y, z) => {
-      const nervura = Math.abs(z) < cm(0.22) ? 1.45 : 1;
-      return [nervura * 0.94, nervura, nervura * 0.86];
-    });
+    pintar(g, (x, y, z) => (Math.abs(z) < cm(0.24) ? [1.34, 1.42, 1.2] : [1, 1, 1]));
 
     const angulo = i * 2.399;
     const raio = cm(1 + (i % 5) * 1.5);
     grupo.add(
-      peca(g, matFolha, {
+      peca(duasFaces(g), matFolha, {
         x: Math.cos(angulo) * raio,
         z: Math.sin(angulo) * raio,
         y: cm(3.4) + (i % 4) * cm(0.75),
@@ -906,12 +953,13 @@ export function construirSalada() {
     );
   }
 
-  const matCrouton = material(CORES.crouton, { roughness: 0.82, receita: 'empanado', relevo: 2.09 });
+  const matCrouton = material(C.crouton, 'crocante');
   for (let i = 0; i < 8; i += 1) {
     const lado = cm(1.4 + aleatorio() * 0.5);
-    const g = new RoundedBoxGeometry(lado, lado, lado, 1, lado * 0.12);
-    deformar(g, { amplitude: cm(0.06), frequencia: 40, semente: i * 9 });
-    pintar(g, (x, y, z) => 0.86 + fbm(x * 80, y * 80, z * 80, 2) * 0.36);
+    const g = new RoundedBoxGeometry(lado, lado, lado, 1, lado * 0.1);
+    // Ruído mantido: crouton é pão rasgado, o irregular é o que o identifica
+    deformar(g, { amplitude: cm(0.055), frequencia: 40, semente: i * 9 });
+    pintar(g, (x, y, z) => 0.88 + fbm(x * 80, y * 80, z * 80, 2) * 0.32);
     const angulo = i * 1.7;
     grupo.add(
       peca(g, matCrouton, {
@@ -924,7 +972,7 @@ export function construirSalada() {
   }
 
   // Lascas de parmesão: finas e curvadas, não plaquinhas retas
-  const matParmesao = material(CORES.parmesao, { roughness: 0.5, receita: 'empanado', relevo: 1.14 });
+  const matParmesao = material(C.parmesao, 'crocante');
   for (let i = 0; i < 9; i += 1) {
     const g = new THREE.PlaneGeometry(cm(1.9), cm(1.2), 6, 3);
     g.rotateX(-Math.PI / 2);
@@ -935,11 +983,11 @@ export function construirSalada() {
     }
     pos.needsUpdate = true;
     g.computeVertexNormals();
-    granular(g, 0.1, 80);
+    granular(g, 0.07, 80);
 
     const angulo = i * 2.1;
     grupo.add(
-      peca(g, matParmesao, {
+      peca(duasFaces(g), matParmesao, {
         x: Math.cos(angulo) * cm(4.4),
         z: Math.sin(angulo) * cm(4.4),
         y: cm(5.9),

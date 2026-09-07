@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { applyPinch, clamp, scalePercentage, type PhysicalDimensions, type ScaleCalibration } from './scale';
 import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } from '@/features/models3d/modelLoader';
@@ -296,8 +297,18 @@ export function useCameraSession({
       30,
     );
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 1.5));
-    const sol = new THREE.DirectionalLight(0xfff1e0, 2.2);
+
+    // Mapa de ambiente: sem ele, `clearcoat` e `roughness` baixa não têm o que
+    // refletir, e o prato chega na câmera fosco — que era metade do motivo de
+    // a comida parecer massinha aqui, mesmo depois de os modelos melhorarem.
+    // `RoomEnvironment` é gerado em memória: dá reflexo PBR crível sem baixar
+    // um HDRI e sem custo de rede no meio da experiência.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const ambiente = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    scene.environment = ambiente.texture;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.9));
+    const sol = new THREE.DirectionalLight(0xfff1e0, 2.0);
     sol.position.set(0.7, 1.6, 0.9);
     sol.castShadow = true;
     sol.shadow.mapSize.set(1024, 1024);
@@ -333,6 +344,12 @@ export function useCameraSession({
     scene.add(sombra);
 
     const limpezas: (() => void)[] = [];
+    // O mapa de ambiente é uma textura de GPU: sem liberar, cada abertura da
+    // câmera deixa uma para trás.
+    limpezas.push(() => {
+      ambiente.dispose();
+      pmrem.dispose();
+    });
 
     runtime.current = {
       renderer,

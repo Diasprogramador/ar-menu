@@ -9,8 +9,8 @@
  *   - 1 unidade de cena = 1 metro (glTF 2.0);
  *   - Y para cima;
  *   - origem no centro da base, ou seja, o modelo "apoia" em y = 0;
- *   - textura e relevo gerados por codigo em `lib/texturas.mjs`, mais cor por
- *     vertice para o que e especifico de cada peca.
+ *   - aparencia definida por cor de material e cor por vertice, sem textura:
+ *     ver a justificativa em `lib/acabamento.mjs`.
  *
  * Cada prato sai em dois formatos:
  *   .glb   - WebXR e o visualizador 3D, no Android e no desktop;
@@ -25,7 +25,6 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { USDZExporter } from 'three/addons/exporters/USDZExporter.js';
 
-import { instalarCanvasNode } from './lib/canvas-node.mjs';
 import { cm } from './lib/modelagem.mjs';
 import {
   construirAneis,
@@ -40,11 +39,10 @@ import {
   construirSalada,
 } from './lib/pratos.mjs';
 
-// Os exportadores convertem textura passando por um <canvas>, e serializam o
-// binario com FileReader. Nenhum dos dois existe no Node; estes polyfills
-// entregam exatamente o caminho que eles percorrem.
-instalarCanvasNode();
-
+// O GLTFExporter serializa o binario com FileReader, que o Node nao tem. Ja o
+// polyfill de <canvas> saiu junto com as texturas: sem imagem para converter,
+// nenhum dos dois exportadores toca em canvas.
+//
 // Node ja tem Blob, entao para o FileReader basta a ponte para ArrayBuffer.
 if (typeof globalThis.FileReader === 'undefined') {
   globalThis.FileReader = class NodeFileReader {
@@ -94,7 +92,11 @@ const MODELOS = [
  */
 function assentarNaOrigem(objeto) {
   objeto.updateMatrixWorld(true);
-  const caixa = new THREE.Box3().setFromObject(objeto);
+  // `precise` percorre os vértices em vez de girar a caixa da geometria. Sem
+  // ele, uma peça rotacionada mede a diagonal da própria caixa — uma folha de
+  // alface girada 0,9 rad inflava a largura do prato em 41%, e a calibração
+  // encolhia o modelo na mesa pelo mesmo fator.
+  const caixa = new THREE.Box3().setFromObject(objeto, true);
   const centro = new THREE.Vector3();
   caixa.getCenter(centro);
   objeto.position.x -= centro.x;
@@ -153,7 +155,7 @@ async function exportar({ file, build }) {
   assentarNaOrigem(grupo);
   scene.add(grupo);
 
-  const caixa = new THREE.Box3().setFromObject(scene);
+  const caixa = new THREE.Box3().setFromObject(scene, true);
   const tamanho = new THREE.Vector3();
   caixa.getSize(tamanho);
 

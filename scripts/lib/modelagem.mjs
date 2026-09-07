@@ -1,26 +1,20 @@
 /**
- * Ferramentas de modelagem procedural de comida.
+ * Ferramentas de geometria procedural de comida.
  *
- * O que separa um prato de uma massinha de modelar não é polígono: é
- * irregularidade e variação de cor. Um pão de verdade não é um cilindro liso e
- * de cor única — a superfície ondula, a crosta escurece onde tostou, e o miolo
- * é mais claro que a casca.
+ * Este módulo cuida da **forma**; quem cuida da aparência é `acabamento.mjs`,
+ * com a paleta, a tabela de brilhos e a ondulação de silhueta.
  *
- * Este módulo dá as ferramentas que produzem isso:
+ * O que sobrou aqui:
  *
- *   `deformar`  desloca os vértices ao longo da normal usando ruído coerente,
- *               quebrando a silhueta perfeita da geometria primitiva;
- *   `pintar`    grava cor por vértice, que os dois exportadores preservam
- *               (COLOR_0 no glTF, primvars:displayColor no USD);
- *   `material`  monta o material PBR e acopla a textura procedural da receita
- *               escolhida — cor e relevo, gerados em `texturas.mjs`;
- *   `ruido`     ruído de valor determinístico — o mesmo modelo sai idêntico em
- *               toda execução, o que mantém o repositório reproduzível.
- *
- * A divisão de trabalho entre os três: a deformação resolve a silhueta, que se
- * lê de longe; a textura resolve a superfície, que se lê de perto; a cor por
- * vértice resolve o que é específico daquela peça — a borda carbonizada de um
- * hambúrguer não se repete como padrão, então não pode vir de textura.
+ *   `ruido`/`fbm`  ruído de valor determinístico — o mesmo modelo sai idêntico
+ *                  em toda execução, o que mantém o repositório reproduzível;
+ *   `deformar`     desloca vértices ao longo da normal, usado só onde a
+ *                  irregularidade é a identidade da comida (farinha de rosca,
+ *                  crouton). Espalhado por tudo, era o que dava o aspecto de
+ *                  massinha amassada;
+ *   `pintar`       grava cor por vértice, que os dois exportadores preservam
+ *                  (COLOR_0 no glTF, primvars:displayColor no USD);
+ *   `girar`/`disco` sólidos de revolução, a base de quase todo prato.
  *
  * A cor por vértice é sempre um **multiplicador** em torno de 1,0, e nunca a
  * cor final. O tom base vive em `material.color`. Assim, se algum visualizador
@@ -28,8 +22,7 @@
  * em vez de branco.
  */
 import * as THREE from 'three';
-
-import { textura } from './texturas.mjs';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* -------------------------------------------------------------------------
  * Ruído determinístico
@@ -92,8 +85,12 @@ export function fbm(x, y, z, oitavas = 3) {
 /**
  * Empurra cada vértice ao longo da própria normal, na medida do ruído.
  *
- * `amplitude` é em metros — as mesmas unidades da cena. Uma casca de pão pede
- * algo entre 1 e 3 mm; uma bola de sorvete, 4 mm.
+ * `amplitude` é em metros — as mesmas unidades da cena.
+ *
+ * Use com parcimônia. Aplicado a uma superfície que deveria ser lisa, este é o
+ * efeito que transforma comida em massinha de modelar: a aresta some, a
+ * silhueta ondula sem motivo e a peça perde a leitura. Vale só quando o
+ * irregular é a identidade do alimento — empanado, crouton, casca rachada.
  */
 export function deformar(geometry, { amplitude = 0.002, frequencia = 40, oitavas = 3, semente = 0 } = {}) {
   geometry.computeVertexNormals();
@@ -131,6 +128,10 @@ export function deformar(geometry, { amplitude = 0.002, frequencia = 40, oitavas
  * A função recebe `(x, y, z, indice)` e devolve um multiplicador — número para
  * variação neutra de luminosidade, ou `[r, g, b]` para desviar o tom. Fica em
  * torno de 1,0: 0,6 escurece, 1,2 clareia.
+ *
+ * É por aqui que entram os sinais que identificam a comida — marca de chapa,
+ * borda carbonizada, miolo claro do tomate. Prefira transição curta a degradê
+ * longo: contorno definido lê como comida, degradê lê como sujeira.
  */
 export function pintar(geometry, calcular) {
   const posicoes = geometry.attributes.position;
@@ -150,53 +151,10 @@ export function pintar(geometry, calcular) {
 
 /** Variação sutil e sem padrão visível — o mínimo para tirar o ar de plástico. */
 export function granular(geometry, intensidade = 0.09, frequencia = 60) {
-  return pintar(geometry, (x, y, z) => 1 - intensidade / 2 + fbm(x * frequencia, y * frequencia, z * frequencia) * intensidade);
-}
-
-/* -------------------------------------------------------------------------
- * Materiais
- * ---------------------------------------------------------------------- */
-
-/**
- * Material PBR com cor por vértice ligada.
- *
- * `roughness` é o parâmetro que mais muda a leitura do alimento: pão e carne
- * ficam acima de 0,8, queijo derretido perto de 0,35, vidro e gelo abaixo de
- * 0,1. Errar isso é o que faz tudo parecer o mesmo material fosco.
- */
-export function material(
-  cor,
-  {
-    roughness = 0.8,
-    metalness = 0,
-    transparent = false,
-    opacity = 1,
-    receita,
-    repeticao = 1,
-    relevo = 0.6,
-    lado,
-  } = {},
-) {
-  const m = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(cor),
-    roughness,
-    metalness,
-    transparent,
-    opacity,
-    vertexColors: true,
-    side: lado ?? (transparent ? THREE.DoubleSide : THREE.FrontSide),
-  });
-
-  if (receita) {
-    // Sem clonar: materiais com a mesma receita e repetição apontam para a
-    // mesma textura, e o arquivo exportado carrega a imagem uma vez só.
-    const { map, normalMap } = textura(receita, { repeticao });
-    m.map = map;
-    m.normalMap = normalMap;
-    m.normalScale = new THREE.Vector2(relevo, relevo);
-  }
-
-  return m;
+  return pintar(
+    geometry,
+    (x, y, z) => 1 - intensidade / 2 + fbm(x * frequencia, y * frequencia, z * frequencia) * intensidade,
+  );
 }
 
 /* -------------------------------------------------------------------------
@@ -205,72 +163,8 @@ export function material(
 
 export const cm = (v) => v / 100;
 
-/**
- * Reescreve as UV por projeção em caixa, na escala do mundo.
- *
- * As UV que as geometrias primitivas trazem seguem a topologia, não o tamanho:
- * a lateral de um cilindro mapeia V ao longo da altura, então um hambúrguer de
- * 37 cm de circunferência e 1,9 cm de altura estica a textura vinte vezes. O
- * resultado é listra horizontal — foi exatamente assim que a carne ganhou cara
- * de tábua de madeira.
- *
- * Projetando cada vértice no plano do eixo dominante da sua normal, um ladrilho
- * passa a medir sempre `tileCm` centímetros, em qualquer peça. A projeção deixa
- * costura onde a normal troca de eixo, mas em superfície irregular e com
- * textura de ruído isso não se distingue.
- */
-export function projetarUv(geometry, tileCm = 4.5) {
-  geometry.computeVertexNormals();
-  const posicoes = geometry.attributes.position;
-  const normais = geometry.attributes.normal;
-  const uv = new Float32Array(posicoes.count * 2);
-  const escala = 1 / cm(tileCm);
-
-  for (let i = 0; i < posicoes.count; i += 1) {
-    const x = posicoes.getX(i);
-    const y = posicoes.getY(i);
-    const z = posicoes.getZ(i);
-
-    const nx = Math.abs(normais.getX(i));
-    const ny = Math.abs(normais.getY(i));
-    const nz = Math.abs(normais.getZ(i));
-
-    let u;
-    let v;
-    if (ny >= nx && ny >= nz) {
-      u = x;
-      v = z;
-    } else if (nx >= nz) {
-      u = z;
-      v = y;
-    } else {
-      u = x;
-      v = y;
-    }
-
-    uv[i * 2] = u * escala;
-    uv[i * 2 + 1] = v * escala;
-  }
-
-  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  return geometry;
-}
-
-const jaProjetadas = new WeakSet();
-
-/**
- * Malha com a geometria já deformada e pintada, apoiada em `y`.
- *
- * Se o material tem textura, as UV da geometria são reprojetadas na escala do
- * mundo — uma vez por geometria, mesmo quando ela é reaproveitada em várias
- * peças.
- */
-export function peca(geometry, mat, { y = 0, x = 0, z = 0, rotacao, tileCm } = {}) {
-  if (mat.map && !jaProjetadas.has(geometry)) {
-    projetarUv(geometry, tileCm ?? 4.5);
-    jaProjetadas.add(geometry);
-  }
-
+/** Malha com a geometria já pronta, apoiada em `y`. */
+export function peca(geometry, mat, { y = 0, x = 0, z = 0, rotacao } = {}) {
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.position.set(x, y, z);
   if (rotacao) mesh.rotation.set(rotacao[0] ?? 0, rotacao[1] ?? 0, rotacao[2] ?? 0);
@@ -281,8 +175,9 @@ export function peca(geometry, mat, { y = 0, x = 0, z = 0, rotacao, tileCm } = {
  * Perfil girado — a forma certa para pão, tigela, copo e bola de sorvete.
  *
  * `pontos` é o contorno no plano XY, de baixo para cima; a rotação em torno de
- * Y produz o sólido. Dá controle muito mais fino que empilhar cilindros, que é
- * exatamente o que fazia tudo parecer modelado com massinha.
+ * Y produz o sólido. Dá controle muito mais fino que empilhar cilindros, e é o
+ * que permite desenhar a cintura do pão e o ressalto da borda da carne em vez
+ * de esperar que o ruído produza alguma coisa parecida.
  */
 export function girar(pontos, segmentos = 48) {
   return new THREE.LatheGeometry(
@@ -296,6 +191,55 @@ export function disco(raio, altura, { segmentos = 48, raioBase } = {}) {
   const g = new THREE.CylinderGeometry(raio, raioBase ?? raio, altura, segmentos, 3);
   g.translate(0, altura / 2, 0);
   return g;
+}
+
+/**
+ * Transforma uma superfície aberta numa lâmina fina com as duas faces.
+ *
+ * Peças como fatia de queijo, folha de alface e tira de bacon nascem de um
+ * plano, que só tem uma face. A saída fácil é `side: DoubleSide`, mas o USDZ
+ * não suporta material de dupla face — no iPhone essas peças sumiriam quando
+ * vistas por baixo, que é justamente o ângulo de quem olha um prato na mesa.
+ *
+ * Aqui a lâmina ganha verso de verdade: uma cópia deslocada para dentro pela
+ * espessura, com as normais invertidas e o sentido dos triângulos trocado. Sai
+ * uma casca sólida que funciona nos dois formatos — e que, de quebra, sombreia
+ * melhor, porque passa a ter volume.
+ */
+export function duasFaces(geometry, espessura = 0.0004) {
+  geometry.computeVertexNormals();
+
+  const verso = geometry.clone();
+  const posicoes = verso.attributes.position;
+  const normais = verso.attributes.normal;
+
+  for (let i = 0; i < posicoes.count; i += 1) {
+    const nx = normais.getX(i);
+    const ny = normais.getY(i);
+    const nz = normais.getZ(i);
+    posicoes.setXYZ(
+      i,
+      posicoes.getX(i) - nx * espessura,
+      posicoes.getY(i) - ny * espessura,
+      posicoes.getZ(i) - nz * espessura,
+    );
+    normais.setXYZ(i, -nx, -ny, -nz);
+  }
+  posicoes.needsUpdate = true;
+  normais.needsUpdate = true;
+
+  // Sem inverter o sentido dos triângulos, a face de trás continua sendo
+  // descartada pelo culling e o verso não aparece.
+  const indice = verso.getIndex();
+  const lista = indice.array;
+  for (let i = 0; i < lista.length; i += 3) {
+    const trocado = lista[i];
+    lista[i] = lista[i + 2];
+    lista[i + 2] = trocado;
+  }
+  indice.needsUpdate = true;
+
+  return mergeGeometries([geometry, verso]);
 }
 
 /** Sequência determinística em [0, 1) — substitui Math.random sem perder reprodutibilidade. */

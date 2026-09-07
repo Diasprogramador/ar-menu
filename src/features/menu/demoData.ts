@@ -134,7 +134,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1639024471283-03518883512d'),
     prep: 15,
     calories: 480,
-    model: { file: 'aneis-de-cebola', width: 15.4, height: 8.2, depth: 15.6, bytes: 63488 },
+    model: { file: 'aneis-de-cebola', width: 14.4, height: 9.5, depth: 14.4, bytes: 262168 },
   },
   {
     slug: 'batata-crocante',
@@ -149,7 +149,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 12,
     calories: 540,
-    model: { file: 'batata-crocante', width: 10.1, height: 15.1, depth: 10.8, bytes: 60416 },
+    model: { file: 'batata-crocante', width: 10.4, height: 14.4, depth: 10.2, bytes: 465408 },
   },
   {
     slug: 'smash-bacon',
@@ -165,7 +165,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 18,
     calories: 890,
-    model: { file: 'smash-bacon', width: 12.7, height: 9.9, depth: 12.2, bytes: 197632 },
+    model: { file: 'smash-bacon', width: 11.9, height: 11.3, depth: 11.9, bytes: 764252 },
   },
   {
     slug: 'burger-da-casa',
@@ -182,7 +182,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 18,
     calories: 820,
-    model: { file: 'burger-da-casa', width: 15.7, height: 9.8, depth: 15.4, bytes: 204800 },
+    model: { file: 'burger-da-casa', width: 16.5, height: 10.9, depth: 16.6, bytes: 685232 },
   },
   {
     slug: 'smash-duplo-cheddar',
@@ -211,7 +211,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 25,
     calories: 1250,
-    model: { file: 'pizza-margherita', height: 2.1, diameter: 30.4, bytes: 277504 },
+    model: { file: 'pizza-margherita', height: 2.7, diameter: 30.2, bytes: 525944 },
   },
   {
     slug: 'pizza-pepperoni',
@@ -226,7 +226,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 25,
     calories: 1420,
-    model: { file: 'pizza-pepperoni', height: 2.1, diameter: 30.4, bytes: 381952 },
+    model: { file: 'pizza-pepperoni', height: 2.7, diameter: 30.2, bytes: 468432 },
   },
   {
     slug: 'pizza-quatro-queijos',
@@ -254,7 +254,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 15,
     calories: 1640,
-    model: { file: 'costela-defumada', width: 24, height: 5, depth: 17, bytes: 18432 },
+    model: { file: 'costela-defumada', width: 24.0, height: 5.0, depth: 17.0, bytes: 486848 },
   },
   {
     slug: 'salada-caesar',
@@ -268,7 +268,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1550304943-4f24f54ddde9'),
     prep: 12,
     calories: 420,
-    model: { file: 'salada-caesar', height: 6.6, diameter: 21, bytes: 153600 },
+    model: { file: 'salada-caesar', height: 7.6, diameter: 21.1, bytes: 515908 },
   },
   {
     slug: 'picanha-na-brasa',
@@ -298,7 +298,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 10,
     calories: 680,
-    model: { file: 'brownie', width: 18, height: 6.4, depth: 18, bytes: 57344 },
+    model: { file: 'brownie', width: 18.0, height: 5.1, depth: 18.0, bytes: 415976 },
   },
   {
     slug: 'petit-gateau',
@@ -312,7 +312,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1624353365286-3f8d62daad51'),
     prep: 12,
     calories: 620,
-    model: { file: 'petit-gateau', width: 15, height: 6.2, depth: 15, bytes: 64512 },
+    model: { file: 'petit-gateau', width: 15.0, height: 5.3, depth: 15.0, bytes: 288860 },
   },
   {
     slug: 'pudim-de-leite',
@@ -338,7 +338,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 8,
     calories: 520,
-    model: { file: 'milkshake', height: 20.7, diameter: 8.4, bytes: 81920 },
+    model: { file: 'milkshake', height: 20.6, diameter: 8.4, bytes: 263872 },
   },
   {
     slug: 'refrigerante',
@@ -351,7 +351,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1581636625402-29b2a704ef13'),
     prep: 2,
     calories: 140,
-    model: { file: 'refrigerante', height: 14, diameter: 7.8, bytes: 43008 },
+    model: { file: 'refrigerante', height: 14.0, diameter: 7.7, bytes: 148532 },
   },
   {
     slug: 'suco-natural',

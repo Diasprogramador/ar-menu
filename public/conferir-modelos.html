@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Conferir modelos 3D</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        background: #f2efea;
+        color: #14110f;
+        font-family: 'Inter Tight', 'Segoe UI', system-ui, sans-serif;
+      }
+      header { padding: 18px 20px 10px; }
+      h1 { margin: 0; font-size: 17px; font-weight: 600; }
+      p { margin: 4px 0 0; font-size: 13px; color: #6b655e; }
+      .grade {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 12px;
+        padding: 14px 20px 40px;
+      }
+      figure {
+        margin: 0;
+        background: #fff;
+        border: 1px solid #e4e0da;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      canvas { display: block; width: 100%; height: 340px; }
+      figcaption {
+        border-top: 1px solid #e4e0da;
+        padding: 7px 10px 8px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      figcaption b { font-weight: 600; }
+      figcaption span { color: #6b655e; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Conferência dos modelos 3D</h1>
+      <p>Página de desenvolvimento: renderiza os doze GLB lado a lado, na mesma luz e enquadramento.</p>
+    </header>
+    <div class="grade" id="grade"></div>
+
+    <script type="module">
+      import * as THREE from '/node_modules/three/build/three.module.js';
+      import { GLTFLoader } from '/node_modules/three/examples/jsm/loaders/GLTFLoader.js';
+      import { RoomEnvironment } from '/node_modules/three/examples/jsm/environments/RoomEnvironment.js';
+
+      const MODELOS = [
+        'smash-bacon', 'burger-da-casa', 'pizza-margherita', 'pizza-pepperoni',
+        'batata-crocante', 'aneis-de-cebola', 'brownie', 'petit-gateau',
+        'milkshake', 'refrigerante', 'costela-defumada', 'salada-caesar',
+      ];
+
+      const grade = document.getElementById('grade');
+      const loader = new GLTFLoader();
+
+      for (const nome of MODELOS) {
+        const figura = document.createElement('figure');
+        const canvas = document.createElement('canvas');
+        const legenda = document.createElement('figcaption');
+        legenda.innerHTML = `<b>${nome}</b><br><span>carregando…</span>`;
+        figura.append(canvas, legenda);
+        grade.append(figura);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(canvas.clientWidth || 380, 340, false);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        const scene = new THREE.Scene();
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+        const camera = new THREE.PerspectiveCamera(34, (canvas.clientWidth || 380) / 340, 0.01, 20);
+
+        const luz = new THREE.DirectionalLight(0xfff4e6, 2.6);
+        luz.castShadow = true;
+        luz.shadow.mapSize.set(1024, 1024);
+        scene.add(luz);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+
+        try {
+          const gltf = await loader.loadAsync(`/demo-models/${nome}.glb`);
+          const objeto = gltf.scene;
+          objeto.traverse((no) => {
+            if (no.isMesh) { no.castShadow = true; no.receiveShadow = true; }
+          });
+          scene.add(objeto);
+
+          const caixa = new THREE.Box3().setFromObject(objeto);
+          const tamanho = caixa.getSize(new THREE.Vector3());
+          const raio = Math.max(tamanho.x, tamanho.y, tamanho.z);
+
+          const chao = new THREE.Mesh(
+            new THREE.PlaneGeometry(raio * 8, raio * 8),
+            new THREE.ShadowMaterial({ opacity: 0.22 }),
+          );
+          chao.rotation.x = -Math.PI / 2;
+          chao.receiveShadow = true;
+          scene.add(chao);
+
+          const distancia = raio / Math.tan((camera.fov * Math.PI) / 360) + raio * 0.7;
+          camera.position.set(distancia * 0.62, tamanho.y * 0.75 + raio * 0.5, distancia * 0.78);
+          camera.lookAt(0, tamanho.y * 0.42, 0);
+
+          luz.position.set(raio * 1.6, raio * 3.4, raio * 2.2);
+          luz.shadow.camera.far = raio * 10;
+          luz.shadow.camera.left = -raio * 2;
+          luz.shadow.camera.right = raio * 2;
+          luz.shadow.camera.top = raio * 2;
+          luz.shadow.camera.bottom = -raio * 2;
+          luz.shadow.camera.updateProjectionMatrix();
+
+          renderer.render(scene, camera);
+
+          const cm = (v) => (v * 100).toFixed(1);
+          legenda.innerHTML =
+            `<b>${nome}</b><br><span>${cm(tamanho.x)} × ${cm(tamanho.y)} × ${cm(tamanho.z)} cm</span>`;
+        } catch (erro) {
+          legenda.innerHTML = `<b>${nome}</b><br><span style="color:#b02a20">${erro.message}</span>`;
+        }
+      }
+
+      document.title = 'Modelos prontos';
+    </script>
+  </body>
+</html>

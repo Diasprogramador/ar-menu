@@ -198,7 +198,46 @@ Convenções de todo modelo gerado:
 - Y para cima;
 - origem no centro da base — o modelo *apoia* em `y = 0`, o que faz o
   posicionamento no `hit-test` funcionar sem cálculo extra;
-- sem textura, só materiais PBR por cor: os 12 modelos somam 1,5 MB em GLB.
+- textura e relevo procedurais, gerados no mesmo passo.
+
+### Por que a primeira versão parecia massinha de modelar
+
+A versão inicial empilhava cilindros de cor chapada. O resultado tinha a forma
+certa e a leitura errada: uma superfície lisa e de cor uniforme devolve sempre o
+mesmo brilho, e o olho conclui plástico. Três camadas resolveram isso, cada uma
+respondendo por uma distância de leitura:
+
+| Camada | O que resolve | Onde vive |
+|---|---|---|
+| Deformação por ruído | a silhueta, que se lê de longe | `deformar` |
+| Textura de cor e relevo | a superfície, que se lê de perto | `texturas.mjs` |
+| Cor por vértice | o que é específico da peça e não se repete | `pintar` |
+
+A terceira existe porque a borda carbonizada de um hambúrguer ou a mancha de
+leopardo de uma pizza não são padrão: dependem de onde o ponto está na peça, e
+por isso não podem vir de uma textura que se repete.
+
+### A armadilha da UV
+
+O defeito mais difícil de diagnosticar foi a carne com cara de tábua de madeira.
+A causa não era a textura, e sim as UV que as geometrias primitivas trazem: elas
+seguem a topologia, não o tamanho. A lateral de um cilindro mapeia V ao longo da
+altura, então um hambúrguer com 37 cm de circunferência e 1,9 cm de altura
+estica a textura vinte vezes, e todo ruído vira listra horizontal.
+
+A correção é `projetarUv`, que reescreve as UV por projeção em caixa na escala
+do mundo: um ladrilho passa a medir sempre os mesmos centímetros, em qualquer
+peça e em qualquer geometria. A projeção deixa costura onde a normal troca de
+eixo dominante, mas em superfície irregular com textura de ruído isso não se
+distingue.
+
+### Iluminação faz metade do trabalho
+
+Mapa de normais só aparece se a luz variar pela superfície. Com iluminação
+ambiente difusa, o relevo some e o modelo volta a parecer plástico mesmo com a
+textura correta. O visualizador usa a montagem de fotografia de comida: chave
+quente e rasante, que revela relevo; contraluz fria, que separa a silhueta;
+preenchimento baixo, só para a sombra não fechar em preto.
 
 Cada prato sai nos dois formatos na mesma execução: `.glb` para WebXR e para o
 visualizador 3D, `.usdz` para o Quick Look do iPhone. O USDZ é exportado com

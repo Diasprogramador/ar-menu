@@ -5,3 +5,6 @@ Disallow: /admin
 Disallow: /admin/
 
 Sitemap: /sitemap.xml
+
+# Pagina de conferencia dos modelos: ferramenta de desenvolvimento
+Disallow: /conferir-modelos.html

@@ -73,7 +73,7 @@ export function ModelViewer3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
@@ -94,15 +94,29 @@ export function ModelViewer3D({
       50,
     );
 
-    const key = new THREE.DirectionalLight(0xffffff, 2.1);
+    // Iluminação de mesa de fotografia de comida, e não luz de estúdio neutra.
+    // A chave entra rasante, de cima e de lado: é o ângulo que revela relevo —
+    // o poro do pão, a fibra da carne, a irregularidade do empanado. Com luz
+    // difusa e frontal, o mapa de normais some e tudo volta a parecer plástico.
+    const key = new THREE.DirectionalLight(0xfff1e0, 3.4);
     key.position.set(0.6, 1.4, 0.9);
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.mapSize.set(2048, 2048);
     key.shadow.camera.near = 0.05;
     key.shadow.camera.far = 6;
-    key.shadow.bias = -0.0012;
+    key.shadow.bias = -0.0009;
+    key.shadow.normalBias = 0.002;
     scene.add(key);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    // Contraluz fria: separa a silhueta do fundo e marca a borda molhada de
+    // molho e queijo, que é onde o brilho especular conta a textura.
+    const rim = new THREE.DirectionalLight(0xdce8ff, 1.5);
+    rim.position.set(-0.9, 0.7, -1.1);
+    scene.add(rim);
+
+    // Preenchimento baixo: o suficiente para a sombra não fechar em preto,
+    // sem lavar o contraste que a chave criou.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.55));
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -158,7 +172,9 @@ export function ModelViewer3D({
 
         const shadowCatcher = new THREE.Mesh(
           new THREE.PlaneGeometry(radius * 8, radius * 8),
-          new THREE.ShadowMaterial({ opacity: 0.16 }),
+          // Sombra mais densa: é ela que assenta o prato numa superfície em vez
+          // de deixá-lo flutuando no vazio.
+          new THREE.ShadowMaterial({ opacity: 0.3 }),
         );
         shadowCatcher.rotation.x = -Math.PI / 2;
         shadowCatcher.receiveShadow = true;
@@ -176,7 +192,17 @@ export function ModelViewer3D({
         controls.update();
 
         key.shadow.camera.far = distance * 4;
-        key.position.set(radius * 1.4, radius * 3.2, radius * 2.1);
+        key.position.set(radius * 1.9, radius * 2.6, radius * 1.6);
+        rim.position.set(-radius * 2.2, radius * 1.4, -radius * 2.4);
+
+        // A sombra precisa cobrir só o objeto: uma câmera ortográfica grande
+        // demais desperdiça resolução e a sombra sai borrada.
+        const alcance = radius * 1.6;
+        key.shadow.camera.left = -alcance;
+        key.shadow.camera.right = alcance;
+        key.shadow.camera.top = alcance;
+        key.shadow.camera.bottom = -alcance;
+        key.shadow.camera.updateProjectionMatrix();
 
         callbacks.current.onCalibrated?.(prepared.calibration);
         setState({ status: 'ready' });

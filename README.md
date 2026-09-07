@@ -9,6 +9,9 @@ superfície por `hit-test`, escala derivada das dimensões físicas cadastradas 
 restaurante, e degradação em cascata para AR Quick Look (iOS) ou visualizador 3D
 interativo quando o aparelho não suporta o caminho imersivo.
 
+**No ar:** [cardápio de demonstração](https://ar-menu-tau-opal.vercel.app/r/brasa-e-mesa)
+· [página do produto](https://ar-menu-tau-opal.vercel.app)
+
 ---
 
 ## Stack
@@ -62,6 +65,9 @@ brasa1234
 
 ### 3. Variáveis de ambiente
 
+Esta etapa é opcional para ver o cardápio funcionando — veja *Modo demonstração*
+mais abaixo. Ela é obrigatória para o painel do restaurante.
+
 ```bash
 cp .env.example .env
 ```
@@ -89,6 +95,26 @@ npm run dev
 | `npm test` | Suíte de testes |
 | `npm run gen:models` | Regera os 12 modelos GLB de demonstração |
 | `npm run gen:icons` | Regera os ícones PNG do PWA |
+
+---
+
+## Modo demonstração
+
+Sem as chaves do Supabase, o cardápio público não mostra tela de erro: ele serve
+o catálogo estático de `src/features/menu/demoData.ts`, equivalente ao
+`seed.sql`. É assim que a versão publicada funciona — cardápio, prato,
+realidade aumentada e pedido rodam de ponta a ponta sem backend.
+
+| | Com `.env` preenchido | Sem `.env` |
+|---|---|---|
+| Cardápio, prato, AR | Supabase com RLS | catálogo estático |
+| Pedido | RPC `create_order`, total do servidor | salvo no `localStorage` |
+| Analytics | RPC `track_event` | não registra |
+| Painel `/admin` | completo | tela explicando o que configurar |
+
+O comprovante avisa explicitamente quando o pedido ficou só no aparelho. A
+troca é decidida em um lugar só, `env.isConfigured`, e o mesmo código atende os
+dois casos.
 
 ---
 
@@ -196,6 +222,9 @@ toca em "Ver na minha mesa". Recharts idem, só no painel.
 - **Imagens de demonstração vêm do Unsplash.** São URLs externas no seed; se
   alguma sair do ar, a interface mostra o fallback com a inicial do prato em vez
   de imagem quebrada. Fotos próprias substituem tudo pelo upload no painel.
+- **O modo demonstração não substitui o banco.** Ele existe para a vitrine
+  pública. Multi-tenant, papéis, métricas e totais autoritativos só valem com o
+  Supabase configurado.
 
 ---
 

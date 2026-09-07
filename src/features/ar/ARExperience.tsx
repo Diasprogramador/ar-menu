@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { detectARCapabilities, resolveARMode, type ARCapabilities, type ARMode } from './capabilities';
 import { useARSession } from './useARSession';
+import { useCameraSession } from './useCameraSession';
 import { ModelViewer3D } from '@/features/models3d/ModelViewer3D';
 import { Button, Spinner } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -67,10 +68,28 @@ export function ARExperience({
     placement,
     onEvent: (event) => {
       if (event.type === 'failed') {
-        setFallbackReason('Não foi possível abrir a realidade aumentada. Veja o prato em 3D.');
-        setMode('viewer-3d');
+        // Falhou o caminho imersivo, mas ainda há câmera: não caia direto
+        // para o 3D sem tentar mostrar o prato na mesa.
+        setFallbackReason('A realidade aumentada imersiva não abriu. Vamos usar a câmera.');
+        setMode('camera');
       }
       onEvent?.(event.type);
+    },
+  });
+
+  const camera = useCameraSession({
+    modelUrl: model.model_url,
+    dimensions,
+    placement,
+    onEvent: (evento, motivo) => {
+      // Permissão negada é recuperável: o cliente pode liberar a câmera e
+      // tentar de novo. Cair direto para o 3D esconderia a instrução de como
+      // fazer isso. Só descemos um degrau quando não há volta.
+      if (evento === 'failed' && motivo !== 'permission') {
+        setFallbackReason('Não foi possível usar a câmera. Veja o prato em 3D.');
+        setMode('viewer-3d');
+      }
+      onEvent?.(evento);
     },
   });
 
@@ -142,6 +161,7 @@ export function ARExperience({
               product={product}
               model={model}
               currency={currency}
+              capabilities={capabilities}
               status={session.status}
               progress={session.progress}
               error={session.error}
@@ -198,6 +218,70 @@ export function ARExperience({
           dimensionsLabel={formatDimensions(dimensions)}
         />
       </FullScreen>
+    );
+  }
+
+  /* ---------------------------------------------------------- Câmera direta */
+  if (mode === 'camera') {
+    return (
+      <div className="fixed inset-0 z-[60] flex flex-col bg-ink">
+        {/* A imagem da câmera fica atrás; o canvas do modelo, por cima */}
+        <video
+          ref={camera.videoRef}
+          playsInline
+          muted
+          autoPlay
+          className={cn(
+            'absolute inset-0 size-full object-cover',
+            camera.ativo ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        <div ref={camera.canvasHostRef} className="absolute inset-0" />
+
+        <div className="relative flex h-full flex-col">
+          <ARTopBar
+            productName={product.name}
+            onClose={() => {
+              camera.stop();
+              handleClose();
+            }}
+            translucent={camera.ativo}
+          />
+
+          {camera.ativo ? (
+            <CameraLiveControls
+              camera={camera}
+              product={product}
+              model={model}
+              currency={currency}
+              onAddToCart={onAddToCart}
+            />
+          ) : (
+            <ARLaunchPanel
+              product={product}
+              model={model}
+              currency={currency}
+              capabilities={capabilities}
+              status={
+                camera.status === 'requesting-camera'
+                  ? 'requesting'
+                  : camera.status === 'loading-model'
+                    ? 'loading-model'
+                    : camera.status === 'error'
+                      ? 'error'
+                      : 'idle'
+              }
+              progress={camera.progress}
+              error={camera.error}
+              onStart={() => void camera.start()}
+              onFallback={() => {
+                setMode('viewer-3d');
+                onEvent?.('3d');
+              }}
+            />
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -334,8 +418,8 @@ function DiagnosticoAR({
       rotulo: 'WebXR no navegador',
       ok: capabilities.immersiveAR,
       detalhe: capabilities.immersiveAR
-        ? 'realidade aumentada imersiva disponível'
-        : 'no Android, precisa do Chrome e dos Serviços de RA do Google; o iPhone não tem WebXR',
+        ? 'rastreamento de superfície completo'
+        : 'sem os Serviços de RA do Google. Não é problema: a câmera direta assume',
     },
     {
       rotulo: 'Visualizador da Apple',
@@ -348,6 +432,14 @@ function DiagnosticoAR({
       rotulo: 'Arquivo USDZ do prato',
       ok: Boolean(model.usdz_url),
       detalhe: model.usdz_url ? 'cadastrado' : 'sem ele, o iPhone não abre a câmera',
+    },
+    {
+      rotulo: 'Câmera do aparelho',
+      ok: capabilities.camera && capabilities.secureContext,
+      detalhe:
+        capabilities.camera && capabilities.secureContext
+          ? 'caminho universal: mostra o prato na mesa sem instalar nada'
+          : 'sem câmera acessível, resta o visualizador 3D',
     },
     {
       rotulo: 'Gráficos 3D (WebGL)',
@@ -469,6 +561,7 @@ function ARLaunchPanel({
   product,
   model,
   currency,
+  capabilities,
   status,
   progress,
   error,
@@ -478,9 +571,12 @@ function ARLaunchPanel({
   product: ARExperienceProps['product'];
   model: ProductModel;
   currency: string;
+  capabilities: ARCapabilities;
   status: ReturnType<typeof useARSession>['status'];
   progress: number;
-  error: ReturnType<typeof useARSession>['error'];
+  // As duas sessões falham por motivos diferentes, mas o painel só precisa da
+  // mensagem e da dica — o tipo aqui é o que os dois têm em comum.
+  error: { message: string; hint?: string } | null;
   onStart: () => void;
   onFallback: () => void;
 }) {
@@ -550,6 +646,8 @@ function ARLaunchPanel({
         >
           Ver em 3D sem a câmera
         </button>
+
+        <DiagnosticoAR capabilities={capabilities} model={model} />
       </div>
     </div>
   );
@@ -644,6 +742,119 @@ function ARLiveControls({
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-medium text-paper">{product.name}</p>
             <p className="tabular text-sm text-paper/70">{formatMoney(product.price_cents, currency)}</p>
+          </div>
+          <Button variant="ember" onClick={onAddToCart}>
+            Adicionar
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Controles sobre a câmera no modo universal.
+ *
+ * O ajuste de altura é o que torna a escala verdadeira e não estimada: sabendo
+ * o campo de visão e a distância até a mesa, o tamanho em tela de um prato de
+ * dimensão conhecida está determinado. A altura é a única incógnita, e o
+ * cliente a resolve num gesto, olhando para a própria mesa.
+ */
+function CameraLiveControls({
+  camera,
+  product,
+  model,
+  currency,
+  onAddToCart,
+}: {
+  camera: ReturnType<typeof useCameraSession>;
+  product: ARExperienceProps['product'];
+  model: ProductModel;
+  currency: string;
+  onAddToCart: () => void;
+}) {
+  const [mostrarAjuste, setMostrarAjuste] = useState(false);
+  const colocado = camera.status === 'placed';
+
+  return (
+    <>
+      <div className="flex flex-1 items-center justify-center px-8">
+        {!colocado && (
+          <p className="rounded-full bg-black/45 px-4 py-2 text-center text-sm text-paper backdrop-blur-sm">
+            Aponte para a mesa e toque onde o prato deve ficar
+          </p>
+        )}
+      </div>
+
+      {mostrarAjuste && (
+        <div data-ar-control className="mx-4 mb-3 rounded-[10px] bg-black/65 p-4 backdrop-blur-sm">
+          <label htmlFor="altura-mesa" className="text-[13px] text-paper">
+            Distância do celular até a mesa
+          </label>
+          <input
+            id="altura-mesa"
+            type="range"
+            min={camera.limites.minCm}
+            max={camera.limites.maxCm}
+            step={1}
+            value={camera.alturaCm}
+            onChange={(evento) => camera.ajustarAltura(Number(evento.target.value))}
+            className="mt-2 w-full accent-[#FF6B2C]"
+          />
+          <p className="tabular mt-1 text-[13px] text-paper/65">
+            {camera.alturaCm} cm — ajuste até o prato bater com o tamanho da sua mesa
+          </p>
+          <p className="mt-2 text-[12px] text-paper/50">
+            {camera.temGiroscopio
+              ? 'O prato fica ancorado enquanto você gira o celular. Caminhar em volta faz ele derivar.'
+              : 'Sem sensor de movimento neste aparelho: o prato fica fixo na tela.'}
+          </p>
+        </div>
+      )}
+
+      <div className="safe-bottom px-4">
+        <div className="mb-3 flex items-center justify-center gap-2">
+          <ControlButton label="Posicionar em outro lugar" onClick={camera.reposicionar}>
+            <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M10 3v14M3 10h14" strokeLinecap="round" />
+              <circle cx="10" cy="10" r="3.2" />
+            </svg>
+          </ControlButton>
+
+          <button
+            type="button"
+            data-ar-control
+            onClick={camera.resetarEscala}
+            className="tabular h-11 rounded-full bg-black/45 px-4 text-sm text-paper backdrop-blur-sm"
+          >
+            {camera.scalePercent}% · voltar ao 1:1
+          </button>
+
+          <ControlButton
+            label={mostrarAjuste ? 'Ocultar ajuste de escala' : 'Ajustar escala'}
+            onClick={() => setMostrarAjuste((valor) => !valor)}
+          >
+            <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M4 7h12M4 13h12M8 4v6M13 10v6" strokeLinecap="round" />
+            </svg>
+          </ControlButton>
+        </div>
+
+        <div
+          data-ar-control
+          className="flex items-center gap-3 rounded-[12px] bg-black/55 p-3 backdrop-blur-sm"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-medium text-paper">{product.name}</p>
+            <p className="tabular truncate text-[13px] text-paper/70">
+              {formatMoney(product.price_cents, currency)} ·{' '}
+              {formatDimensions({
+                width_cm: model.width_cm,
+                height_cm: model.height_cm,
+                depth_cm: model.depth_cm,
+                diameter_cm: model.diameter_cm,
+              })}
+            </p>
           </div>
           <Button variant="ember" onClick={onAddToCart}>
             Adicionar

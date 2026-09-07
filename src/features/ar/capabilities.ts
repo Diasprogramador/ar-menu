@@ -5,20 +5,29 @@
  * pelos componentes: navegador muda, lista de user agent envelhece, e o produto
  * passa a prometer o que o aparelho não entrega.
  *
- * Três caminhos possíveis, em ordem de qualidade:
+ * Quatro caminhos, em ordem de qualidade:
  *
- *   1. WebXR immersive-ar  — Android/Chrome, Oculus, alguns navegadores desktop
- *                            com headset. Rastreia superfície de verdade
- *                            (hit-test) e desenha dentro da nossa cena.
+ *   1. WebXR immersive-ar  — Android/Chrome com os Serviços de RA do Google.
+ *                            Rastreia superfície de verdade (hit-test).
  *   2. Quick Look          — iOS/Safari. O sistema abre o visualizador nativo a
- *                            partir de um arquivo USDZ. Exige que o produto
- *                            tenha `usdz_url` cadastrado.
- *   3. Visualizador 3D     — sempre disponível onde há WebGL. É o fallback, não
- *                            um consolo: mantém rotação, zoom limitado,
- *                            dimensões e o botão de adicionar ao pedido.
+ *                            partir de um arquivo USDZ, com rastreamento
+ *                            completo. Exige `usdz_url` no produto.
+ *   3. Câmera + giroscópio — universal: funciona em qualquer navegador com
+ *                            HTTPS, câmera e WebGL, sem instalar nada. O prato
+ *                            aparece na mesa em tamanho real e fica ancorado
+ *                            enquanto a pessoa gira o aparelho. Não acompanha
+ *                            deslocamento, porque sem SLAM não há como saber
+ *                            que o aparelho andou.
+ *   4. Visualizador 3D     — quando não há câmera ou a permissão foi negada.
+ *                            Mantém rotação, zoom limitado, dimensões e o botão
+ *                            de adicionar ao pedido.
+ *
+ * O caminho 3 existe porque uma parcela grande dos Android não tem os Serviços
+ * de RA instalados, e o produto promete "escaneou o QR Code e vê na mesa" — sem
+ * pedir instalação de nada.
  */
 
-export type ARMode = 'webxr' | 'quick-look' | 'viewer-3d' | 'none';
+export type ARMode = 'webxr' | 'quick-look' | 'camera' | 'viewer-3d' | 'none';
 
 export type ARCapabilities = {
   /** WebXR com sessão immersive-ar e hit-test disponível. */
@@ -108,11 +117,14 @@ async function probe(): Promise<ARCapabilities> {
     if (!xr) {
       reason = quickLook
         ? 'Este iPhone usa o visualizador nativo da Apple para AR.'
-        : 'Este navegador não expõe a API WebXR.';
+        : 'Este navegador não expõe a API WebXR; usamos a câmera diretamente.';
     } else {
       try {
         immersiveAR = await xr.isSessionSupported('immersive-ar');
-        if (!immersiveAR) reason = 'Este aparelho não oferece sessões de AR imersiva.';
+        if (!immersiveAR) {
+          reason =
+            'Este aparelho não tem os Serviços de RA do Google; usamos a câmera diretamente.';
+        }
       } catch (error) {
         reason = 'Não foi possível consultar o suporte a AR neste aparelho.';
         void error;
@@ -124,9 +136,11 @@ async function probe(): Promise<ARCapabilities> {
     ? 'webxr'
     : quickLook
       ? 'quick-look'
-      : webgl
-        ? 'viewer-3d'
-        : 'none';
+      : camera && secureContext && webgl
+        ? 'camera'
+        : webgl
+          ? 'viewer-3d'
+          : 'none';
 
   return { immersiveAR, quickLook, webgl, camera, secureContext, bestMode, reason };
 }
@@ -143,8 +157,11 @@ export function resetARCapabilitiesCache(): void {
 }
 
 /**
- * Modo efetivo considerando o produto: Quick Look só vale se existir USDZ.
- * Sem isso, um iPhone abriria um link quebrado.
+ * Modo efetivo considerando o produto.
+ *
+ * Quick Look só vale se existir USDZ: sem ele, um iPhone abriria um link que o
+ * sistema não interpreta. E o caminho de câmera exige contexto seguro, porque
+ * `getUserMedia` não funciona fora de HTTPS.
  */
 export function resolveARMode(
   capabilities: ARCapabilities,
@@ -153,6 +170,7 @@ export function resolveARMode(
   if (!product.hasModel || !product.arEnabled) return 'none';
   if (capabilities.immersiveAR) return 'webxr';
   if (capabilities.quickLook && product.hasUsdz) return 'quick-look';
+  if (capabilities.camera && capabilities.secureContext && capabilities.webgl) return 'camera';
   if (capabilities.webgl) return 'viewer-3d';
   return 'none';
 }

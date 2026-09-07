@@ -95,16 +95,52 @@ O resultado é memoizado por sessão: não muda enquanto a aba está aberta.
 `resolveARMode` combina o aparelho **com o produto**:
 
 ```
-tem modelo e AR ligada?  ─não→  none
+tem modelo e AR ligada?          ─não→  none
         │sim
-WebXR imersivo?          ─sim→  webxr
+WebXR imersivo?                  ─sim→  webxr
         │não
-Quick Look E tem USDZ?   ─sim→  quick-look
+Quick Look E tem USDZ?           ─sim→  quick-look
         │não
-tem WebGL?               ─sim→  viewer-3d
+câmera E https E WebGL?          ─sim→  camera
         │não
-                                none (ficha com fotos)
+tem WebGL?                       ─sim→  viewer-3d
+        │não
+                                        none (ficha com fotos)
 ```
+
+### O caminho universal
+
+O degrau `camera` existe porque o WebXR, no Android, depende dos Serviços de RA
+do Google estarem instalados — e uma parcela grande dos aparelhos não os tem. O
+produto promete que basta escanear o QR Code, então não pode terminar em "vá à
+loja e instale um aplicativo".
+
+Ele usa apenas o que qualquer navegador oferece: `getUserMedia` para a imagem da
+câmera, `deviceorientation` para a atitude do aparelho e WebGL para desenhar o
+prato por cima. O modelo é ancorado num plano horizontal abaixo da câmera, e a
+orientação do sensor mantém a cena estável enquanto a pessoa gira o celular.
+
+**A escala continua real.** Conhecendo o campo de visão e a distância até o
+plano, o tamanho em pixels de um objeto de dimensão física conhecida está
+determinado. O navegador não expõe a distância focal da câmera, então assumimos
+um campo de visão horizontal de 66° — a faixa em que quase todos os aparelhos
+caem — e deixamos a altura do celular sobre a mesa num controle deslizante. O
+cliente ajusta uma vez, olhando para a própria mesa, e o erro residual do campo
+de visão é absorvido nesse gesto.
+
+**O que ele não faz:** rastrear translação. Sem SLAM, o navegador não sabe que o
+aparelho se deslocou, então caminhar em volta da mesa faz o prato derivar. A
+interface diz isso em vez de deixar o cliente achar que quebrou. É também a
+razão de este caminho ficar *abaixo* do WebXR e do Quick Look na ordem: onde há
+rastreamento de verdade, usamos rastreamento de verdade.
+
+### Falha recuperável não desce um degrau
+
+Permissão de câmera negada não faz a interface cair para o visualizador 3D. É um
+estado do qual o cliente pode sair — basta liberar a câmera no cadeado do
+navegador — e descer automaticamente esconderia a instrução de como fazer isso.
+A cascata só avança quando não há volta: sem câmera no aparelho, sem HTTPS, ou
+modelo que não carrega.
 
 O `E tem USDZ` não é detalhe. Um `<a rel="ar">` apontando para um `.glb` abre um
 arquivo que o iOS não entende: tela em branco, sem erro. Sem USDZ, o iPhone vai

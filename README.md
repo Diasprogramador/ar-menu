@@ -134,15 +134,27 @@ ou publique em qualquer host com HTTPS (Vercel, Netlify, Cloudflare Pages).
 
 **Suporte por plataforma**
 
-| Plataforma | Caminho | Requisito |
-|---|---|---|
-| Android + Chrome/Edge | WebXR `immersive-ar` | Google Play Services for AR |
-| iOS + Safari | AR Quick Look | arquivo `.usdz` do produto (os 12 de demonstração já vêm prontos) |
-| Desktop, navegadores sem WebXR | Visualizador 3D | WebGL |
-| Sem WebGL | Ficha do prato com fotos | — |
+| Ordem | Caminho | Requisito | Rastreamento |
+|---|---|---|---|
+| 1 | WebXR `immersive-ar` | Serviços de RA do Google (Android) | superfície + translação |
+| 2 | AR Quick Look | iOS com `.usdz` no produto | superfície + translação |
+| 3 | **Câmera + giroscópio** | qualquer navegador com HTTPS e câmera | orientação |
+| 4 | Visualizador 3D | WebGL | — |
+| 5 | Ficha com fotos | — | — |
+
+O caminho 3 é o que garante a promessa "escaneou o QR Code e vê na mesa" **sem
+instalar nada**. Boa parte dos Android não tem os Serviços de RA do Google, e o
+iOS não implementa WebXR — nesses casos o app abre a câmera diretamente,
+desenha o prato em tamanho físico correto sobre a imagem e o mantém ancorado
+pelo giroscópio enquanto a pessoa gira o aparelho.
+
+O que ele não faz, e a interface diz isso: acompanhar deslocamento. Sem SLAM
+não há como saber que o aparelho andou, então caminhar em volta da mesa faz o
+prato derivar. Girar no lugar funciona.
 
 Nenhum desses caminhos leva a uma tela quebrada, e o botão de adicionar ao
-pedido está presente em todos.
+pedido está presente em todos. Quando a câmera não abre, a tela mostra **"Por
+que a câmera não abriu?"** com cada condição verificada e o que fazer.
 
 ---
 
@@ -209,10 +221,17 @@ toca em "Ver na minha mesa". Recharts idem, só no painel.
 
 ## Limitações conhecidas
 
-- **AR no iPhone depende de USDZ por produto.** O iOS não implementa WebXR, e o
-  Quick Look só abre a partir de um `.usdz`. Os 12 pratos de demonstração já
-  saem nos dois formatos (`npm run gen:models`), mas um prato novo enviado pelo
-  painel só ganha AR nativa no iPhone quando o restaurante subir também o USDZ.
+- **A câmera universal não acompanha deslocamento.** Ela ancora a orientação,
+  não a posição: girar o aparelho no lugar funciona, caminhar em volta da mesa
+  faz o prato derivar. Resolver isso exigiria SLAM em WebAssembly, que hoje só
+  existe em SDKs comerciais.
+- **A escala na câmera universal pede um ajuste.** O navegador não expõe a
+  distância focal, então assumimos um campo de visão típico e deixamos a altura
+  do aparelho sobre a mesa num controle deslizante. Um gesto do cliente, uma
+  vez, e o tamanho passa a ser fiel.
+- **AR nativa no iPhone depende de USDZ por produto.** Os 12 pratos de
+  demonstração já saem nos dois formatos (`npm run gen:models`); um prato novo
+  enviado pelo painel usa a câmera universal até o restaurante subir o USDZ.
   Converter GLB → USDZ no servidor é o próximo passo.
 - **SEO é client-side.** Títulos, Open Graph e JSON-LD são aplicados no
   navegador. Rastreadores que executam JavaScript leem normalmente; para

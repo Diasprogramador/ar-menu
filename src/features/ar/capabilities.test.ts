@@ -34,15 +34,26 @@ describe('resolveARMode', () => {
     );
   });
 
-  it('cai para o visualizador 3D no iPhone sem USDZ', () => {
-    // Sem USDZ, o link rel="ar" abriria um arquivo que o iOS não entende
+  it('usa a câmera direta no iPhone sem USDZ', () => {
+    // Sem USDZ, o link rel="ar" abriria um arquivo que o iOS não entende;
+    // a câmera direta ainda mostra o prato na mesa
     expect(resolveARMode(capabilities({ quickLook: true }), produto({ hasUsdz: false }))).toBe(
-      'viewer-3d',
+      'camera',
     );
   });
 
-  it('cai para o visualizador 3D quando não há AR imersiva', () => {
-    expect(resolveARMode(capabilities(), produto())).toBe('viewer-3d');
+  it('usa a câmera direta quando não há AR imersiva', () => {
+    // O caso mais comum: Android sem os Serviços de RA do Google
+    expect(resolveARMode(capabilities(), produto())).toBe('camera');
+  });
+
+  it('cai para o visualizador 3D quando não há câmera', () => {
+    expect(resolveARMode(capabilities({ camera: false }), produto())).toBe('viewer-3d');
+  });
+
+  it('cai para o visualizador 3D fora de contexto seguro', () => {
+    // getUserMedia não funciona sem HTTPS
+    expect(resolveARMode(capabilities({ secureContext: false }), produto())).toBe('viewer-3d');
   });
 
   it('não oferece nada quando o produto não tem modelo', () => {
@@ -59,5 +70,15 @@ describe('resolveARMode', () => {
 
   it('não oferece nada sem WebGL', () => {
     expect(resolveARMode(capabilities({ webgl: false }), produto())).toBe('none');
+  });
+
+  it('prefere rastreamento real quando ele existe', () => {
+    // WebXR e Quick Look rastreiam a superfície; a câmera direta só ancora a
+    // orientação. A ordem de preferência precisa refletir isso.
+    const completo = capabilities({ immersiveAR: true, quickLook: true, camera: true });
+    expect(resolveARMode(completo, produto({ hasUsdz: true }))).toBe('webxr');
+    expect(resolveARMode(capabilities({ quickLook: true, camera: true }), produto({ hasUsdz: true }))).toBe(
+      'quick-look',
+    );
   });
 });

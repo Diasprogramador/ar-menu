@@ -36,3 +36,6 @@ supabase/.branches/
 
 # Vercel
 .vercel
+
+# Evidências e renders gerados localmente
+artifacts/

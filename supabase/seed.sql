@@ -214,18 +214,25 @@ insert into public.product_models (
   restaurant_id, product_id, model_url, usdz_url, format, ar_enabled,
   width_cm, height_cm, depth_cm, diameter_cm, scale_multiplier, file_size_bytes
 ) values
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000004', '/demo-models/smash-bacon.glb', '/demo-models/smash-bacon.usdz',      'glb', true, 11.9, 11.3, 11.9, null, 1.0, 764252),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000005', '/demo-models/burger-da-casa.glb', '/demo-models/burger-da-casa.usdz',   'glb', true, 16.5, 10.9, 16.6, null, 1.0, 685232),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000007', '/demo-models/pizza-margherita.glb', '/demo-models/pizza-margherita.usdz', 'glb', true, null, 2.7, null, 30.2, 1.0, 525944),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000008', '/demo-models/pizza-pepperoni.glb', '/demo-models/pizza-pepperoni.usdz',  'glb', true, null, 2.7, null, 30.2, 1.0, 468432),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000003', '/demo-models/batata-crocante.glb', '/demo-models/batata-crocante.usdz',  'glb', true, 10.4, 14.4, 10.2, null, 1.0, 465408),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000002', '/demo-models/aneis-de-cebola.glb', '/demo-models/aneis-de-cebola.usdz',  'glb', true, 14.4, 9.5, 14.4, null, 1.0, 262168),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000013', '/demo-models/brownie.glb', '/demo-models/brownie.usdz',          'glb', true, 18.0, 5.1, 18.0, null, 1.0, 415976),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000014', '/demo-models/petit-gateau.glb', '/demo-models/petit-gateau.usdz',     'glb', true, 15.0, 5.3, 15.0, null, 1.0, 288860),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000016', '/demo-models/milkshake.glb', '/demo-models/milkshake.usdz',        'glb', true, null, 20.6, null, 8.4, 1.0, 263872),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000017', '/demo-models/refrigerante.glb', '/demo-models/refrigerante.usdz',     'glb', true, null, 14.0, null, 7.7, 1.0, 148532),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000010', '/demo-models/costela-defumada.glb', '/demo-models/costela-defumada.usdz', 'glb', true, 24.0, 5.0, 17.0, null, 1.0, 486848),
-  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000011', '/demo-models/salada-caesar.glb', '/demo-models/salada-caesar.usdz',    'glb', true, null, 7.6, null, 21.1, 1.0, 515908)
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000004', '/demo-models/smash-bacon.glb', '/demo-models/smash-bacon.usdz',      'glb', true, 12.2, 9.8, 12.1, null, 1.0, 272484),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000001', '/demo-models/bolinho-de-costela.glb', '/demo-models/bolinho-de-costela.usdz', 'glb', true, 24, 5.4, 24, null, 1.0, 622020),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000006', '/demo-models/smash-duplo-cheddar.glb', '/demo-models/smash-duplo-cheddar.usdz', 'glb', true, 15.7, 13.2, 15.7, null, 1.0, 1165352),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000009', '/demo-models/pizza-quatro-queijos.glb', '/demo-models/pizza-quatro-queijos.usdz', 'glb', true, null, 2.4, null, 30, 1.0, 1004748),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000012', '/demo-models/picanha-na-brasa.glb', '/demo-models/picanha-na-brasa.usdz', 'glb', true, 28, 4.5, 28, null, 1.0, 502652),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000015', '/demo-models/pudim-de-leite.glb', '/demo-models/pudim-de-leite.usdz', 'glb', true, null, 5.4, null, 18, 1.0, 134300),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000018', '/demo-models/suco-natural.glb', '/demo-models/suco-natural.usdz', 'glb', true, 8.8, 15, 8, null, 1.0, 90888),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000019', '/demo-models/agua-com-gas.glb', '/demo-models/agua-com-gas.usdz', 'glb', true, 11.2, 23.5, 7.5, null, 1.0, 344732),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000005', '/demo-models/burger-da-casa.glb', '/demo-models/burger-da-casa.usdz',   'glb', true, 14.4, 9.7, 14.4, null, 1.0, 259900),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000007', '/demo-models/pizza-margherita.glb', '/demo-models/pizza-margherita.usdz', 'glb', true, null, 2.7, null, 30.5, 1.0, 151860),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000008', '/demo-models/pizza-pepperoni.glb', '/demo-models/pizza-pepperoni.usdz',  'glb', true, null, 2.7, null, 30.5, 1.0, 150876),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000003', '/demo-models/batata-crocante.glb', '/demo-models/batata-crocante.usdz',  'glb', true, 10.4, 14.4, 10.2, null, 1.0, 383932),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000002', '/demo-models/aneis-de-cebola.glb', '/demo-models/aneis-de-cebola.usdz',  'glb', true, 11.1, 8.8, 11.1, null, 1.0, 141684),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000013', '/demo-models/brownie.glb', '/demo-models/brownie.usdz',          'glb', true, 18.0, 5.0, 18.0, null, 1.0, 236756),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000014', '/demo-models/petit-gateau.glb', '/demo-models/petit-gateau.usdz',     'glb', true, 15.0, 5.4, 15.0, null, 1.0, 128828),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000016', '/demo-models/milkshake.glb', '/demo-models/milkshake.usdz',        'glb', true, null, 20.6, null, 8.4, 1.0, 208668),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000017', '/demo-models/refrigerante.glb', '/demo-models/refrigerante.usdz',     'glb', true, null, 14.0, null, 7.7, 1.0, 156628),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000010', '/demo-models/costela-defumada.glb', '/demo-models/costela-defumada.usdz', 'glb', true, 24.0, 5.0, 17.0, null, 1.0, 108360),
+  ('22222222-0000-4000-8000-000000000001', '44444444-0000-4000-8000-000000000011', '/demo-models/salada-caesar.glb', '/demo-models/salada-caesar.usdz',    'glb', true, null, 7.7, null, 21.1, 1.0, 318912)
 on conflict (product_id) do nothing;
 
 -- -----------------------------------------------------------------------------

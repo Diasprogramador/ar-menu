@@ -49,7 +49,7 @@ supabase db reset
 
 `db reset` aplica as quatro migrations de `supabase/migrations/` e carrega
 `supabase/seed.sql`, que cria o restaurante de demonstração **Brasa & Mesa** com
-6 categorias, 19 produtos, 12 modelos 3D, 12 mesas, QR Codes, 30 dias de pedidos
+6 categorias, 19 produtos, 19 modelos 3D, 12 mesas, QR Codes, 30 dias de pedidos
 e eventos de analytics — o painel abre com números reais, não com telas vazias.
 
 O seed também cria a conta local de demonstração:
@@ -94,6 +94,7 @@ npm run dev
 | `npm run check` | Lint + typecheck + testes |
 | `npm test` | Suíte de testes |
 | `npm run gen:models` | Regera os 12 modelos de demonstração em GLB e USDZ |
+| `npm run check:models` | Valida os 19 modelos, dimensões, base e empacotamento USDZ (Node 22.18+) |
 | `npm run gen:icons` | Regera os ícones PNG do PWA |
 
 ---
@@ -209,9 +210,13 @@ O cliente amplia entre 0,5× e 2× do tamanho real, com um botão de voltar ao 1
 Pinça livre destruiria a única promessa que a AR faz aqui.
 
 **Modelos 3D de demonstração são gerados, não baixados.**
-`scripts/generate-demo-models.mjs` constrói os 12 GLB proceduralmente com three.js,
+`scripts/generate-demo-models.mjs` constrói os 12 GLB originais proceduralmente com three.js,
 com origem no centro da base e 1 unidade = 1 metro. Assets de terceiros vêm com
 unidade, pivô e orientação arbitrários — exatamente o que quebra a escala 1:1.
+Os outros sete são modelados no Blender, sem geradores pagos, e finalizados em
+GLB e USDZ por `scripts/finalize-blender-model.mjs`. Reprodução e limites visuais:
+[Smash Duplo](docs/3d-smash-duplo.md) e [demais produtos](docs/3d-catalogo-restante.md).
+Todos são modelos estilizados, não digitalizações dos pratos reais.
 
 **three.js não entra no bundle do cardápio.**
 O build separa `three` (657 kB) num chunk próprio, carregado só quando o cliente
@@ -229,8 +234,8 @@ toca em "Ver na minha mesa". Recharts idem, só no painel.
   distância focal, então assumimos um campo de visão típico e deixamos a altura
   do aparelho sobre a mesa num controle deslizante. Um gesto do cliente, uma
   vez, e o tamanho passa a ser fiel.
-- **AR nativa no iPhone depende de USDZ por produto.** Os 12 pratos de
-  demonstração já saem nos dois formatos (`npm run gen:models`); um prato novo
+- **AR nativa no iPhone depende de USDZ por produto.** Os 19 pratos de
+  demonstração têm os dois formatos (geradores Three.js e Blender); um prato novo
   enviado pelo painel usa a câmera universal até o restaurante subir o USDZ.
   Converter GLB → USDZ no servidor é o próximo passo.
 - **SEO é client-side.** Títulos, Open Graph e JSON-LD são aplicados no

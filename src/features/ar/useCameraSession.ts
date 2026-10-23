@@ -432,7 +432,9 @@ export function useCameraSession({
       return raio.ray.intersectPlane(plano, alvo) ? alvo.clone() : null;
     };
 
-    const superficie = renderer.domElement;
+    // A camada HTML de instruções fica acima do canvas. Escutar o contêiner
+    // comum permite receber esses toques por bubbling, preservando os controles.
+    const superficie = host.parentElement ?? host;
     const ponteiros = new Map<number, { x: number; y: number }>();
     let distanciaInicial = 0;
     let escalaInicial = 1;

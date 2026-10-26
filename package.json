@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "check": "npm run lint && npm run typecheck && npm run test",
-    "gen:models": "node scripts/generate-demo-models.mjs",
+    "gen:models": "node scripts/generate-realistic-models.mjs",
     "check:models": "node scripts/check-model-catalog.mjs",
     "gen:icons": "node scripts/generate-icons.mjs",
     "db:reset": "supabase db reset"

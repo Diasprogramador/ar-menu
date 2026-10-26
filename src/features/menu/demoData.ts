@@ -122,7 +122,7 @@ const SEEDS: Seed[] = [
     badges: ['Mais pedido'],
     prep: 20,
     calories: 620,
-    model: { file: 'bolinho-de-costela', width: 24, height: 5.4, depth: 24, bytes: 622020 },
+    model: { file: 'bolinho-de-costela', width: 24, height: 5.7, depth: 24, bytes: 429528 },
   },
   {
     slug: 'aneis-de-cebola',
@@ -136,7 +136,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1639024471283-03518883512d'),
     prep: 15,
     calories: 480,
-    model: { file: 'aneis-de-cebola', width: 11.1, height: 8.8, depth: 11.1, bytes: 141684 },
+    model: { file: 'aneis-de-cebola', width: 23, height: 8.5, depth: 23, bytes: 320088 },
   },
   {
     slug: 'batata-crocante',
@@ -151,7 +151,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 12,
     calories: 540,
-    model: { file: 'batata-crocante', width: 10.4, height: 14.4, depth: 10.2, bytes: 383932 },
+    model: { file: 'batata-crocante', width: 24, height: 5.6, depth: 24, bytes: 173640 },
   },
   {
     slug: 'smash-bacon',
@@ -167,7 +167,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 18,
     calories: 890,
-    model: { file: 'smash-bacon', width: 12.2, height: 9.8, depth: 12.1, bytes: 272484 },
+    model: { file: 'smash-bacon', width: 14.6, height: 11.8, depth: 14.6, bytes: 368792 },
   },
   {
     slug: 'burger-da-casa',
@@ -184,7 +184,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 18,
     calories: 820,
-    model: { file: 'burger-da-casa', width: 14.4, height: 9.7, depth: 14.4, bytes: 259900 },
+    model: { file: 'burger-da-casa', width: 14.6, height: 12.3, depth: 14.6, bytes: 396372 },
   },
   {
     slug: 'smash-duplo-cheddar',
@@ -198,7 +198,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1594212699903-ec8a3eca50f5'),
     prep: 22,
     calories: 1180,
-    model: { file: 'smash-duplo-cheddar', width: 15.7, height: 13.2, depth: 15.7, bytes: 1165352 },
+    model: { file: 'smash-duplo-cheddar', width: 16, height: 13.8, depth: 16, bytes: 504744 },
   },
   {
     slug: 'pizza-margherita',
@@ -214,7 +214,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 25,
     calories: 1250,
-    model: { file: 'pizza-margherita', height: 2.7, diameter: 30.5, bytes: 151860 },
+    model: { file: 'pizza-margherita', height: 3.5, diameter: 30, bytes: 311148 },
   },
   {
     slug: 'pizza-pepperoni',
@@ -229,7 +229,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 25,
     calories: 1420,
-    model: { file: 'pizza-pepperoni', height: 2.7, diameter: 30.5, bytes: 150876 },
+    model: { file: 'pizza-pepperoni', height: 3, diameter: 30, bytes: 638372 },
   },
   {
     slug: 'pizza-quatro-queijos',
@@ -242,7 +242,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1513104890138-7c749659a591'),
     prep: 25,
     calories: 1480,
-    model: { file: 'pizza-quatro-queijos', height: 2.4, diameter: 30, bytes: 1004748 },
+    model: { file: 'pizza-quatro-queijos', height: 3.1, diameter: 30, bytes: 685184 },
   },
   {
     slug: 'costela-defumada',
@@ -258,7 +258,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 15,
     calories: 1640,
-    model: { file: 'costela-defumada', width: 24.0, height: 5.0, depth: 17.0, bytes: 108360 },
+    model: { file: 'costela-defumada', width: 25.5, height: 4.9, depth: 18, bytes: 47884 },
   },
   {
     slug: 'salada-caesar',
@@ -272,7 +272,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1550304943-4f24f54ddde9'),
     prep: 12,
     calories: 420,
-    model: { file: 'salada-caesar', height: 7.7, diameter: 21.1, bytes: 318912 },
+    model: { file: 'salada-caesar', height: 7.6, diameter: 21.2, bytes: 205632 },
   },
   {
     slug: 'picanha-na-brasa',
@@ -287,7 +287,7 @@ const SEEDS: Seed[] = [
     badges: ['Novo'],
     prep: 30,
     calories: 1520,
-    model: { file: 'picanha-na-brasa', width: 28, height: 4.5, depth: 28, bytes: 502652 },
+    model: { file: 'picanha-na-brasa', width: 28, height: 5.2, depth: 28, bytes: 368268 },
   },
   {
     slug: 'brownie-com-sorvete',
@@ -303,7 +303,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 10,
     calories: 680,
-    model: { file: 'brownie', width: 18.0, height: 5.0, depth: 18.0, bytes: 236756 },
+    model: { file: 'brownie', width: 17, height: 6.4, depth: 17, bytes: 84944 },
   },
   {
     slug: 'petit-gateau',
@@ -317,7 +317,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1624353365286-3f8d62daad51'),
     prep: 12,
     calories: 620,
-    model: { file: 'petit-gateau', width: 15.0, height: 5.4, depth: 15.0, bytes: 128828 },
+    model: { file: 'petit-gateau', width: 15.6, height: 5.7, depth: 15, bytes: 138448 },
   },
   {
     slug: 'pudim-de-leite',
@@ -330,7 +330,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1587314168485-3236d6710814'),
     prep: 5,
     calories: 380,
-    model: { file: 'pudim-de-leite', height: 5.4, diameter: 18, bytes: 134300 },
+    model: { file: 'pudim-de-leite', height: 5.7, diameter: 18, bytes: 119928 },
   },
   {
     slug: 'milkshake-de-morango',
@@ -344,7 +344,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 8,
     calories: 520,
-    model: { file: 'milkshake', height: 20.6, diameter: 8.4, bytes: 208668 },
+    model: { file: 'milkshake', width: 8.2, height: 21, depth: 8, bytes: 121576 },
   },
   {
     slug: 'refrigerante',
@@ -357,7 +357,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1581636625402-29b2a704ef13'),
     prep: 2,
     calories: 140,
-    model: { file: 'refrigerante', height: 14.0, diameter: 7.7, bytes: 156628 },
+    model: { file: 'refrigerante', width: 9, height: 14.8, depth: 8, bytes: 97380 },
   },
   {
     slug: 'suco-natural',
@@ -370,7 +370,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1622597467836-f3285f2131b8'),
     prep: 5,
     calories: 120,
-    model: { file: 'suco-natural', width: 8.8, height: 15, depth: 8, bytes: 90888 },
+    model: { file: 'suco-natural', width: 9.1, height: 15.8, depth: 8, bytes: 64044 },
   },
   {
     slug: 'agua-com-gas',
@@ -383,7 +383,7 @@ const SEEDS: Seed[] = [
     image: unsplash('1548839140-29a749e1cf4d'),
     prep: 1,
     calories: 0,
-    model: { file: 'agua-com-gas', width: 11.2, height: 23.5, depth: 7.5, bytes: 344732 },
+    model: { file: 'agua-com-gas', width: 10.8, height: 23.5, depth: 7, bytes: 245180 },
   },
 ];
 

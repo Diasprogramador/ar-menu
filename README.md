@@ -93,7 +93,7 @@ npm run dev
 | `npm run build` | Typecheck + build de produção |
 | `npm run check` | Lint + typecheck + testes |
 | `npm test` | Suíte de testes |
-| `npm run gen:models` | Regera os 12 modelos de demonstração em GLB e USDZ |
+| `npm run gen:models` | Regera os 19 modelos no Blender em GLB e USDZ (`BLENDER_PATH` se necessário) |
 | `npm run check:models` | Valida os 19 modelos, dimensões, base e empacotamento USDZ (Node 22.18+) |
 | `npm run gen:icons` | Regera os ícones PNG do PWA |
 
@@ -210,13 +210,15 @@ O cliente amplia entre 0,5× e 2× do tamanho real, com um botão de voltar ao 1
 Pinça livre destruiria a única promessa que a AR faz aqui.
 
 **Modelos 3D de demonstração são gerados, não baixados.**
-`scripts/generate-demo-models.mjs` constrói os 12 GLB originais proceduralmente com three.js,
-com origem no centro da base e 1 unidade = 1 metro. Assets de terceiros vêm com
-unidade, pivô e orientação arbitrários — exatamente o que quebra a escala 1:1.
-Os outros sete são modelados no Blender, sem geradores pagos, e finalizados em
-GLB e USDZ por `scripts/finalize-blender-model.mjs`. Reprodução e limites visuais:
-[Smash Duplo](docs/3d-smash-duplo.md) e [demais produtos](docs/3d-catalogo-restante.md).
-Todos são modelos estilizados, não digitalizações dos pratos reais.
+Os 19 produtos são modelados proceduralmente no Blender por
+`scripts/blender-realistic-catalog.py`, com materiais PBR por ingrediente,
+irregularidade orgânica controlada, origem no centro da base e 1 unidade = 1 metro.
+`npm run gen:models` executa o Blender e finaliza GLB e USDZ por
+`scripts/finalize-blender-model.mjs`. Assets de terceiros vêm com unidade, pivô e
+orientação arbitrários — exatamente o que quebra a escala 1:1. Os modelos são
+detalhados e otimizados para tempo real, não digitalizações dos pratos reais.
+Defina `MODEL_RENDERS=1` para também produzir quatro renders de revisão por item
+em `artifacts/blender-realistic/`.
 
 **three.js não entra no bundle do cardápio.**
 O build separa `three` (657 kB) num chunk próprio, carregado só quando o cliente
@@ -235,7 +237,7 @@ toca em "Ver na minha mesa". Recharts idem, só no painel.
   do aparelho sobre a mesa num controle deslizante. Um gesto do cliente, uma
   vez, e o tamanho passa a ser fiel.
 - **AR nativa no iPhone depende de USDZ por produto.** Os 19 pratos de
-  demonstração têm os dois formatos (geradores Three.js e Blender); um prato novo
+  demonstração têm os dois formatos gerados pelo pipeline Blender; um prato novo
   enviado pelo painel usa a câmera universal até o restaurante subir o USDZ.
   Converter GLB → USDZ no servidor é o próximo passo.
 - **SEO é client-side.** Títulos, Open Graph e JSON-LD são aplicados no

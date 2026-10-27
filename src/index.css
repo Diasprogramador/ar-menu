@@ -25,6 +25,7 @@
   --color-ember: #ff6b2c;
   --color-ember-deep: #c4231a;
   --color-ember-wash: #fff1e9;
+  --color-wine: #6f1d1b;
 
   --color-teal: #0f4c5c;
   --color-teal-soft: #e6eef1;
@@ -143,6 +144,68 @@
   }
   .scroll-x::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Cardápio público: papel de comanda, carvão e pequenos reflexos de brasa. */
+  .menu-shell {
+    --color-paper: #f6f0e5;
+    --color-surface: #eee5d8;
+    --color-surface-deep: #e3d7c7;
+    --color-hairline: #d6c8b6;
+    --color-ink: #18120f;
+    --color-ink-soft: #332722;
+    --color-muted: #75685e;
+    --color-faint: #9c8c7e;
+    --color-ember: #f05a28;
+    --color-ember-deep: #a9341c;
+    --color-positive: #49624a;
+    background-color: var(--color-paper);
+    background-image:
+      radial-gradient(circle at 8% 12%, rgb(111 29 27 / 0.035) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 82% 64%, rgb(24 18 15 / 0.025) 0 1px, transparent 1.5px);
+    background-size: 22px 22px, 29px 29px;
+  }
+
+  .menu-cut {
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  }
+
+  .menu-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .menu-kicker::before {
+    width: 1.5rem;
+    height: 2px;
+    background: var(--ember-gradient);
+    content: '';
+  }
+
+  .menu-ar-panel {
+    background-color: var(--color-ink);
+    background-image:
+      linear-gradient(115deg, transparent 0 68%, rgb(240 90 40 / 0.12) 68% 69%, transparent 69%),
+      repeating-linear-gradient(90deg, transparent 0 31px, rgb(255 255 255 / 0.025) 31px 32px);
+  }
+
+  .menu-price-tab {
+    position: relative;
+  }
+
+  .menu-price-tab::before {
+    position: absolute;
+    inset: 0.42rem auto 0.42rem -0.65rem;
+    width: 2px;
+    background: var(--ember-gradient);
+    content: '';
   }
 }
 

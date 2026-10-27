@@ -157,32 +157,36 @@ export default function ProductPage() {
 
   return (
     <main className="pb-32">
-      <div className="relative">
+      <div className="relative mx-auto max-w-5xl overflow-hidden bg-ink">
         <SmartImage
           src={product.image_url}
           alt={product.name}
-          ratio="4/3"
+          ratio="5/4"
           priority
-          className="max-h-[46vh] w-full"
+          className="max-h-[58vh] min-h-80 w-full bg-ink"
           fallbackLabel={product.name}
         />
         <Link
           to={`/r/${slug}`}
           aria-label="Voltar ao cardápio"
-          className="absolute left-3 top-3 flex size-10 items-center justify-center rounded-full bg-paper/90 backdrop-blur"
+          className="absolute left-4 top-4 flex size-11 items-center justify-center border border-paper/20 bg-ink/70 text-paper backdrop-blur"
         >
           <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.7">
             <path d="M12 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </Link>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ink/75 to-transparent" />
+        <p className="pointer-events-none absolute bottom-4 right-4 font-mono text-[9px] uppercase tracking-[0.14em] text-paper/50">
+          Retrato do modelo em AR
+        </p>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4">
-        <div className="flex flex-wrap items-center gap-1.5 pt-4">
+      <div className="relative mx-auto -mt-1 w-full max-w-3xl bg-paper px-4 sm:-mt-8 sm:px-7 sm:pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-5">
           {product.categories && (
             <Link
               to={`/r/${slug}/categoria/${product.categories.slug}`}
-              className="text-[13px] text-muted underline underline-offset-2"
+              className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ember-deep"
             >
               {product.categories.name}
             </Link>
@@ -194,10 +198,10 @@ export default function ProductPage() {
           ))}
         </div>
 
-        <h1 className="mt-1.5 font-display text-[30px] leading-tight">{product.name}</h1>
+        <h1 className="mt-3 max-w-2xl font-display text-[38px] leading-[1.02] sm:text-5xl">{product.name}</h1>
 
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="tabular font-display text-[24px]">
+        <div className="menu-price-tab ml-3 mt-4 flex items-baseline gap-2">
+          <span className="tabular font-display text-[26px]">
             {formatMoney(product.price_cents, restaurant.currency)}
           </span>
           {product.compare_at_price_cents && (
@@ -208,20 +212,44 @@ export default function ProductPage() {
         </div>
 
         {product.description && (
-          <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">{product.description}</p>
+          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-ink-soft">{product.description}</p>
+        )}
+
+        {(product.prep_time_minutes !== null || (product.calories !== null && product.calories > 0)) && (
+          <dl className="mt-6 grid grid-cols-2 border-y border-hairline py-4">
+            {product.prep_time_minutes !== null && (
+              <div className="border-r border-hairline pr-4">
+                <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-muted">Tempo de preparo</dt>
+                <dd className="mt-1 font-display text-[20px]">{product.prep_time_minutes} minutos</dd>
+              </div>
+            )}
+            {product.calories !== null && product.calories > 0 && (
+              <div className="pl-4">
+                <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-muted">Valor aproximado</dt>
+                <dd className="mt-1 font-display text-[20px]">{product.calories} kcal</dd>
+              </div>
+            )}
+          </dl>
         )}
 
         {/* Chamada de AR: única aplicação do gradiente de brasa na página */}
         {arAvailable && model && (
-          <div className="mt-5 rounded-[10px] border border-hairline p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-1 h-px w-6 shrink-0 ember-rule" aria-hidden />
+          <div className="menu-ar-panel menu-cut mt-7 p-5 text-paper sm:p-6">
+            <div className="flex items-start gap-4">
+              <span className="flex size-11 shrink-0 items-center justify-center border border-ember/40 bg-ember/10 text-ember" aria-hidden>
+                <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.4">
+                  <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
+                  <ellipse cx="12" cy="12" rx="4.5" ry="2.5" />
+                  <path d="M7.5 12v3c0 1.4 2 2.5 4.5 2.5s4.5-1.1 4.5-2.5v-3" />
+                </svg>
+              </span>
               <div className="min-w-0">
-                <p className="font-display text-[19px]">Ver na minha mesa</p>
-                <p className="mt-0.5 text-[14px] text-muted">
-                  O prato aparece na sua mesa pela câmera, em tamanho real.
+                <p className="menu-kicker text-ember">Escala real</p>
+                <p className="mt-2 font-display text-[24px]">Veja na sua mesa</p>
+                <p className="mt-1 text-[14px] text-paper/60">
+                  Abra a câmera e confira o volume do prato antes de pedir.
                 </p>
-                <p className="tabular mt-1.5 text-[13px] text-faint">
+                <p className="tabular mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-paper/40">
                   {formatDimensions(model)} · escala aproximada 1:1
                 </p>
               </div>
@@ -230,7 +258,7 @@ export default function ProductPage() {
               variant="ember"
               size="lg"
               fullWidth
-              className="mt-4"
+              className="mt-5"
               onClick={() => {
                 setArOpen(true);
                 void track(restaurant.id, 'product_ar_opened', { productId: product.id });
@@ -242,34 +270,26 @@ export default function ProductPage() {
         )}
 
         {(product.ingredients.length > 0 || product.allergens.length > 0) && (
-          <section className="mt-6 border-t border-hairline pt-5">
+          <section className="mt-8 border-t border-ink pt-5">
             {product.ingredients.length > 0 && (
               <>
-                <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">
+                <h2 className="font-display text-[22px]">
                   Ingredientes
                 </h2>
-                <p className="mt-1.5 text-[15px]">{product.ingredients.join(', ')}</p>
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {product.ingredients.map((ingredient) => (
+                    <li key={ingredient} className="border border-hairline bg-surface px-3 py-1.5 text-[13px] text-ink-soft">
+                      {ingredient}
+                    </li>
+                  ))}
+                </ul>
               </>
             )}
             {product.allergens.length > 0 && (
-              <p className="mt-3 text-[14px] text-warning">
+              <p className="mt-4 border-l-2 border-warning bg-[#FBF0DE] px-3 py-2 text-[13px] text-warning">
                 <strong className="font-semibold">Contém:</strong> {product.allergens.join(', ')}
               </p>
             )}
-            <dl className="tabular mt-3 flex gap-5 text-[13px] text-muted">
-              {product.prep_time_minutes !== null && (
-                <div>
-                  <dt className="inline">Preparo </dt>
-                  <dd className="inline font-medium text-ink">{product.prep_time_minutes} min</dd>
-                </div>
-              )}
-              {product.calories !== null && product.calories > 0 && (
-                <div>
-                  <dt className="inline">Aprox. </dt>
-                  <dd className="inline font-medium text-ink">{product.calories} kcal</dd>
-                </div>
-              )}
-            </dl>
           </section>
         )}
 

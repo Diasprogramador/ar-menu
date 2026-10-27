@@ -7,6 +7,7 @@ import { ProductCard } from '../components/ProductCard';
 import { EmptyState, SmartImage } from '@/components/ui';
 import { track } from '@/lib/analytics';
 import { cn } from '@/lib/cn';
+import { formatMoney } from '@/lib/format';
 import { useSeo } from '@/lib/seo';
 
 /**
@@ -71,36 +72,39 @@ export default function MenuHomePage() {
   return (
     <main>
       {/* Capa */}
-      <header className="relative">
+      <header className="relative overflow-hidden bg-ink text-paper">
         <SmartImage
           src={restaurant.cover_url}
           alt=""
           ratio="16/9"
           priority
-          className="max-h-52 w-full sm:max-h-72"
+          className="max-h-72 min-h-64 w-full sm:max-h-96"
+          imgClassName="opacity-70 saturate-[0.85]"
           fallbackLabel={restaurant.name}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink/92 via-ink/55 to-ink/10" />
-        <div className="absolute inset-x-0 bottom-0 flex items-start gap-3 p-4 sm:p-6">
+        <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/55 to-transparent" />
+        <div className="absolute right-0 top-0 h-24 w-24 border-l-[24px] border-t-[24px] border-l-transparent border-t-ember/90" aria-hidden />
+        <div className="absolute inset-x-0 bottom-0 mx-auto flex max-w-3xl items-end gap-4 p-5 sm:p-8">
           {restaurant.logo_url && (
             <img
               src={restaurant.logo_url}
               alt=""
               width={56}
               height={56}
-              className="size-12 shrink-0 rounded-[10px] border border-paper/15 bg-ink/60 object-contain p-1 backdrop-blur-sm sm:size-14"
+              className="size-14 shrink-0 border border-paper/15 bg-ink/65 object-contain p-1 backdrop-blur-sm sm:size-16"
             />
           )}
-          <div className="min-w-0">
-          <h1 className="font-display text-[30px] leading-none text-paper sm:text-4xl">
+          <div className="min-w-0 flex-1">
+          <p className="menu-kicker text-paper/60">Menu da casa</p>
+          <h1 className="mt-2 font-display text-[38px] leading-none text-paper sm:text-5xl">
             {restaurant.name}
           </h1>
           {restaurant.description && (
-            <p className="mt-2 max-w-lg text-[14px] leading-snug text-paper/80">
+            <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-paper/70 sm:text-[15px]">
               {restaurant.description}
             </p>
           )}
-          <p className="mt-2 flex items-center gap-2 text-[13px] text-paper/70">
+          <p className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-paper/55">
             <span
               className={cn('size-1.5 rounded-full', isOpen ? 'bg-positive' : 'bg-faint')}
               aria-hidden
@@ -109,7 +113,7 @@ export default function MenuHomePage() {
             {arProducts.length > 0 && (
               <>
                 <span aria-hidden>·</span>
-                {arProducts.length} {arProducts.length === 1 ? 'prato' : 'pratos'} em AR
+                 {products.length} itens · {arProducts.length} em AR
               </>
             )}
           </p>
@@ -117,9 +121,9 @@ export default function MenuHomePage() {
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-2xl px-4">
+      <div className="mx-auto w-full max-w-3xl px-4">
         {/* Busca */}
-        <div className="sticky top-0 z-30 -mx-4 bg-paper/95 px-4 py-3 backdrop-blur">
+        <div className="sticky top-0 z-30 -mx-4 border-b border-hairline bg-paper/92 px-4 py-3 backdrop-blur-xl">
           <label className="sr-only" htmlFor="menu-search">
             Buscar no cardápio
           </label>
@@ -147,7 +151,7 @@ export default function MenuHomePage() {
                 }
               }}
               placeholder="Buscar prato ou ingrediente"
-              className="h-11 w-full rounded-[8px] border border-hairline bg-surface pl-9 pr-3 text-[15px] outline-none placeholder:text-faint focus:border-ink focus:bg-paper"
+              className="h-12 w-full border border-hairline bg-paper pl-10 pr-3 text-[15px] outline-none placeholder:text-faint focus:border-ink"
             />
           </div>
         </div>
@@ -178,46 +182,49 @@ export default function MenuHomePage() {
         ) : (
           <>
             {/* Atalho de categorias */}
-            <nav aria-label="Categorias" className="scroll-x -mx-4 flex gap-2 px-4 pb-1">
-              {categories.map((category) => (
+            <nav aria-label="Categorias" className="scroll-x -mx-4 flex gap-2 border-b border-hairline px-4 pb-4 pt-1">
+              {categories.map((category, index) => (
                 <Link
                   key={category.id}
                   to={`/r/${slug}/categoria/${category.slug}`}
-                  className="shrink-0 snap-start rounded-full border border-hairline px-3.5 py-1.5 text-[14px] font-medium transition-colors hover:border-ink"
+                  className="group shrink-0 snap-start border border-hairline bg-paper px-3.5 py-2 text-[13px] font-semibold transition-colors hover:border-ink"
                 >
+                  <span className="mr-2 font-mono text-[10px] text-ember-deep">{String(index + 1).padStart(2, '0')}</span>
                   {category.name}
                 </Link>
               ))}
             </nav>
 
+            {featured.length > 0 && (
+              <Strip eyebrow="Seleção da casa" title="Comece por estes" products={featured} slug={slug} currency={restaurant.currency} />
+            )}
+
             {arProducts.length > 0 && <ARStrip products={arProducts} slug={slug} currency={restaurant.currency} />}
 
-            {featured.length > 0 && (
-              <Strip title="Mais pedidos" products={featured} slug={slug} currency={restaurant.currency} />
-            )}
-
-            {promos.length > 0 && (
-              <Strip title="Promoções" products={promos} slug={slug} currency={restaurant.currency} />
-            )}
+            {promos[0] && <PromoCallout product={promos[0]} slug={slug} currency={restaurant.currency} />}
 
             {/* Cardápio completo */}
             {categories.map((category) => {
               const items = products.filter((product) => product.category_id === category.id);
               if (items.length === 0) return null;
 
+              const categoryNumber = categories.indexOf(category) + 1;
               return (
-                <section key={category.id} className="pt-8" id={category.slug}>
-                  <div className="flex items-baseline justify-between">
-                    <h2 className="font-display text-[22px]">{category.name}</h2>
+                <section key={category.id} className="pt-12" id={category.slug}>
+                  <div className="flex items-end justify-between border-b border-ink pb-3">
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ember-deep">Seção {String(categoryNumber).padStart(2, '0')}</p>
+                      <h2 className="mt-1 font-display text-[28px]">{category.name}</h2>
+                    </div>
                     <Link
                       to={`/r/${slug}/categoria/${category.slug}`}
-                      className="text-[13px] text-muted underline underline-offset-2"
+                      className="pb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted"
                     >
                       Ver todos
                     </Link>
                   </div>
                   {category.description && (
-                    <p className="mt-1 text-[14px] text-muted">{category.description}</p>
+                    <p className="mt-3 max-w-lg text-[14px] text-muted">{category.description}</p>
                   )}
                   <div className="mt-2">
                     {items.slice(0, 4).map((product) => (
@@ -247,20 +254,23 @@ export default function MenuHomePage() {
 }
 
 function Strip({
+  eyebrow,
   title,
   products,
   slug,
   currency,
 }: {
+  eyebrow: string;
   title: string;
   products: Parameters<typeof ProductCard>[0]['product'][];
   slug: string;
   currency: string;
 }) {
   return (
-    <section className="pt-7">
-      <h2 className="font-display text-[22px]">{title}</h2>
-      <div className="scroll-x -mx-4 mt-3 flex gap-3 px-4">
+    <section className="pt-10">
+      <p className="menu-kicker text-ember-deep">{eyebrow}</p>
+      <h2 className="mt-2 font-display text-[30px]">{title}</h2>
+      <div className="scroll-x -mx-4 mt-4 flex gap-4 px-4 pb-2">
         {products.map((product) => (
           <ProductCard key={product.id} product={product} slug={slug} currency={currency} variant="tile" />
         ))}
@@ -285,19 +295,47 @@ function ARStrip({
   currency: string;
 }) {
   return (
-    <section className="mt-6 rounded-[10px] border border-hairline bg-surface p-4">
-      <div className="flex items-center gap-2">
-        <span className="h-px w-6 ember-rule" aria-hidden />
-        <h2 className="font-display text-[20px]">Veja antes de pedir</h2>
+    <section className="menu-ar-panel -mx-4 mt-12 overflow-hidden px-4 py-8 text-paper sm:mx-0 sm:px-6">
+      <p className="menu-kicker text-ember">Experiência AR</p>
+      <div className="mt-3 flex items-end justify-between gap-5">
+        <div>
+          <h2 className="font-display text-[30px]">Leve o prato à sua mesa</h2>
+          <p className="mt-2 max-w-lg text-[14px] leading-relaxed text-paper/60">
+            Abra a câmera, confira o tamanho real e observe cada detalhe antes de escolher.
+          </p>
+        </div>
+        <span className="hidden font-display text-5xl italic text-paper/10 sm:block" aria-hidden>1:1</span>
       </div>
-      <p className="mt-1 text-[14px] text-muted">
-        Estes pratos aparecem na sua mesa em tamanho real pela câmera do celular.
-      </p>
-      <div className="scroll-x -mx-4 mt-3 flex gap-3 px-4">
+      <div className="scroll-x -mx-4 mt-5 flex gap-4 px-4 pb-1 sm:-mx-6 sm:px-6">
         {products.map((product) => (
-          <ProductCard key={product.id} product={product} slug={slug} currency={currency} variant="tile" />
+          <ProductCard key={product.id} product={product} slug={slug} currency={currency} variant="tile" inverse />
         ))}
       </div>
     </section>
+  );
+}
+
+function PromoCallout({
+  product,
+  slug,
+  currency,
+}: {
+  product: Parameters<typeof ProductCard>[0]['product'];
+  slug: string;
+  currency: string;
+}) {
+  return (
+    <Link
+      to={`/r/${slug}/produto/${product.slug}`}
+      className="mt-10 grid overflow-hidden border border-wine/20 bg-[#6F1D1B] text-paper sm:grid-cols-[1fr_14rem]"
+    >
+      <div className="flex flex-col justify-center p-5 sm:p-6">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-paper/55">Preço especial</p>
+        <h2 className="mt-2 font-display text-[27px]">{product.name}</h2>
+        <p className="mt-2 text-[14px] text-paper/65">Uma escolha da casa por tempo limitado.</p>
+        <p className="mt-4 font-display text-[22px]">{formatMoney(product.price_cents, currency)}</p>
+      </div>
+      <SmartImage src={product.image_url} alt={product.name} ratio="5/3" className="min-h-44 bg-ink sm:min-h-full" fallbackLabel={product.name} />
+    </Link>
   );
 }

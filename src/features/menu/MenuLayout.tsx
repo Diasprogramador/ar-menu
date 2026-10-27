@@ -92,7 +92,7 @@ export function MenuLayout() {
 
   return (
     <MenuContext.Provider value={value}>
-      <div className="min-h-dvh bg-paper pb-28">
+      <div className="menu-shell min-h-dvh bg-paper pb-28">
         {!value.isOpen && (
           <p className="bg-ink px-4 py-2 text-center text-[13px] text-paper">
             {value.restaurant.closed_message ??
@@ -109,12 +109,13 @@ export function MenuLayout() {
 
         <Outlet />
 
-        <footer className="mt-14 border-t border-hairline px-4 py-8 text-center">
-          <p className="font-display text-lg">{value.restaurant.name}</p>
+        <footer className="mt-16 bg-ink px-4 py-10 text-center text-paper">
+          <span className="mx-auto mb-4 block h-px w-10 ember-rule" aria-hidden />
+          <p className="font-display text-xl">{value.restaurant.name}</p>
           {value.restaurant.address && (
-            <p className="mt-1 text-[13px] text-muted">{value.restaurant.address}</p>
+            <p className="mx-auto mt-2 max-w-sm text-[13px] text-paper/55">{value.restaurant.address}</p>
           )}
-          <p className="mt-4 text-[12px] text-faint">
+          <p className="mt-5 text-[11px] uppercase tracking-[0.12em] text-paper/35">
             Cardápio com realidade aumentada por{' '}
             <Link to="/" className="underline underline-offset-2">
               AR Menu

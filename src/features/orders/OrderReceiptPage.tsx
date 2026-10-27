@@ -88,15 +88,17 @@ export default function OrderReceiptPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8">
-      <div className="h-px w-12 ember-rule" />
-      <h1 className="mt-4 font-display text-[30px]">Pedido enviado</h1>
-      <p className="mt-1 text-[15px] text-muted">
-        Cite o código <strong className="tabular font-mono font-semibold text-ink">{receipt.code}</strong>{' '}
-        para o garçom.
-      </p>
+    <main className="mx-auto w-full max-w-3xl px-4 py-8">
+      <header className="menu-ar-panel menu-cut p-6 text-paper">
+        <p className="menu-kicker text-ember">Recebido pela cozinha</p>
+        <h1 className="mt-3 font-display text-[36px]">Pedido enviado</h1>
+        <p className="mt-3 text-[14px] text-paper/55">Mostre este código ao garçom quando precisar.</p>
+        <p className="tabular mt-5 border-t border-paper/15 pt-4 font-mono text-[32px] font-semibold tracking-[0.16em] text-paper">
+          {receipt.code}
+        </p>
+      </header>
 
-      <div className="mt-5 flex items-center gap-2">
+      <div className="mt-5 flex items-center gap-2 border-b border-hairline pb-4">
         <Badge tone={receipt.status === 'delivered' ? 'positive' : 'teal'}>
           {ORDER_STATUS_LABEL[receipt.status]}
         </Badge>

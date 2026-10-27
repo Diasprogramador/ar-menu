@@ -21,11 +21,13 @@ export function ProductCard({
   slug,
   currency,
   variant = 'row',
+  inverse = false,
 }: {
   product: ProductWithModel;
   slug: string;
   currency: string;
   variant?: 'row' | 'tile';
+  inverse?: boolean;
 }) {
   const unavailable = !product.is_available;
   const showAR = hasARExperience(product);
@@ -36,29 +38,28 @@ export function ProductCard({
       <Link
         to={`/r/${slug}/produto/${product.slug}`}
         className={cn(
-          'group block w-44 shrink-0 scroll-ml-4 snap-start sm:w-52',
+          'group block w-64 shrink-0 scroll-ml-4 snap-start sm:w-72',
           unavailable && 'opacity-55',
         )}
         aria-disabled={unavailable}
       >
-        <div className="relative overflow-hidden rounded-[8px]">
+        <div className="menu-cut relative overflow-hidden bg-ink">
           <SmartImage
             src={product.image_url}
             alt={product.name}
-            ratio="1/1"
+            ratio="5/4"
             fallbackLabel={product.name}
             imgClassName="transition-transform duration-500 group-hover:scale-[1.04]"
           />
           {showAR && (
-            <span className="absolute left-2 top-2 rounded-[4px] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white"
-              style={{ background: 'var(--ember-gradient)' }}>
-              AR
+            <span className="absolute left-3 top-3 border border-paper/25 bg-ink/70 px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-paper backdrop-blur-sm">
+              Vista em AR
             </span>
           )}
         </div>
-        <p className="mt-2 line-clamp-2 text-[15px] font-medium leading-snug">{product.name}</p>
-        <p className="tabular mt-0.5 flex items-center gap-1.5 text-sm text-muted">
-          <span className="font-medium text-ink">{formatMoney(product.price_cents, currency)}</span>
+        <p className={cn('mt-3 line-clamp-2 font-display text-[20px] leading-tight', inverse && 'text-paper')}>{product.name}</p>
+        <p className={cn('tabular mt-1 flex items-center gap-2 text-[13px] text-muted', inverse && 'text-paper/50')}>
+          <span className={cn('font-semibold text-ink', inverse && 'text-paper')}>{formatMoney(product.price_cents, currency)}</span>
           {product.prep_time_minutes !== null && <span>· {product.prep_time_minutes} min</span>}
         </p>
       </Link>
@@ -69,13 +70,13 @@ export function ProductCard({
     <Link
       to={`/r/${slug}/produto/${product.slug}`}
       className={cn(
-        'group flex gap-3 border-b border-hairline py-4 transition-colors last:border-b-0 hover:bg-surface/60',
+        'group grid grid-cols-[1fr_7rem] gap-4 border-b border-hairline py-5 transition-colors last:border-b-0 sm:grid-cols-[1fr_8rem]',
         unavailable && 'opacity-55',
       )}
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <h3 className="text-[16px] font-semibold leading-tight">{product.name}</h3>
+          <h3 className="font-display text-[20px] leading-tight">{product.name}</h3>
           {product.badges.map((badge) => (
             <Badge key={badge} tone={badge === 'Promoção' ? 'ember' : 'neutral'}>
               {badge}
@@ -84,7 +85,7 @@ export function ProductCard({
         </div>
 
         {product.description && (
-          <p className="mt-1 line-clamp-2 text-[14px] leading-snug text-muted">
+            <p className="mt-2 line-clamp-2 text-[14px] leading-relaxed text-muted">
             {product.description}
           </p>
         )}
@@ -122,7 +123,7 @@ export function ProductCard({
         src={product.image_url}
         alt={product.name}
         ratio="1/1"
-        className="size-24 shrink-0 rounded-[8px] sm:size-28"
+        className="menu-cut h-28 w-28 shrink-0 bg-ink sm:h-32 sm:w-32"
         fallbackLabel={product.name}
         imgClassName="transition-transform duration-500 group-hover:scale-[1.04]"
       />

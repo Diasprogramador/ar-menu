@@ -152,10 +152,19 @@ export function SmartImage({
 }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     setFailed(false);
     setLoaded(false);
+    // Ao navegar entre telas, a imagem pode vir do cache e disparar `load`
+    // antes do efeito de troca de URL. Reconciliar `complete` evita que o
+    // efeito apague o estado carregado e deixe um placeholder permanente.
+    const image = imageRef.current;
+    if (image?.complete) {
+      if (image.naturalWidth > 0) setLoaded(true);
+      else setFailed(true);
+    }
   }, [src]);
 
   const showFallback = !src || failed;
@@ -175,6 +184,7 @@ export function SmartImage({
         <>
           {!loaded && <div className="skeleton absolute inset-0" />}
           <img
+            ref={imageRef}
             src={src}
             alt={alt}
             loading={priority ? 'eager' : 'lazy'}

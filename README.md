@@ -91,10 +91,12 @@ npm run dev
 |---|---|
 | `npm run dev` | Servidor de desenvolvimento |
 | `npm run build` | Typecheck + build de produção |
-| `npm run check` | Lint + typecheck + testes |
+| `npm run check` | Lint + typecheck + testes + auditoria das capas |
 | `npm test` | Suíte de testes |
 | `npm run gen:models` | Regera os 19 modelos no Blender em GLB e USDZ (`BLENDER_PATH` se necessário) |
+| `npm run gen:covers` | Renderiza no Blender as 19 capas locais a partir dos GLBs publicados |
 | `npm run check:models` | Valida os 19 modelos, dimensões, base e empacotamento USDZ (Node 22.18+) |
+| `npm run check:covers` | Confere quantidade, formato, tamanho e resolução das 19 capas |
 | `npm run gen:icons` | Regera os ícones PNG do PWA |
 
 ---

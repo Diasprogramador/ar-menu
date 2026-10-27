@@ -12,9 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run lint && npm run typecheck && npm run test",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run check:covers",
     "gen:models": "node scripts/generate-realistic-models.mjs",
+    "gen:covers": "node scripts/generate-menu-covers.mjs",
     "check:models": "node scripts/check-model-catalog.mjs",
+    "check:covers": "node scripts/check-menu-covers.mjs",
     "gen:icons": "node scripts/generate-icons.mjs",
     "db:reset": "supabase db reset"
   },

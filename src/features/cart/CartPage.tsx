@@ -88,25 +88,27 @@ export default function CartPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 pb-40 pt-4">
-      <Link
-        to={`/r/${slug}`}
-        className="inline-flex items-center gap-1.5 text-[14px] text-muted hover:text-ink"
-      >
-        <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.7">
-          <path d="M12 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        Continuar escolhendo
-      </Link>
+    <main className="mx-auto w-full max-w-3xl px-4 pb-40 pt-4">
+      <header className="menu-ar-panel px-5 pb-6 pt-4 text-paper sm:px-7">
+        <Link
+          to={`/r/${slug}`}
+          className="inline-flex min-h-11 items-center gap-1.5 text-[13px] text-paper/60 hover:text-paper"
+        >
+          <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.7">
+            <path d="M12 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Continuar escolhendo
+        </Link>
+        <p className="menu-kicker mt-5 text-ember">Comanda aberta</p>
+        <h1 className="mt-3 font-display text-[38px]">Seu pedido</h1>
+        {activeTableCode && (
+          <p className="mt-2 text-[14px] text-paper/55">
+            Entrega na <strong className="font-semibold text-paper">Mesa {activeTableCode}</strong>
+          </p>
+        )}
+      </header>
 
-      <h1 className="mt-3 font-display text-[30px]">Seu pedido</h1>
-      {activeTableCode && (
-        <p className="mt-1 text-[14px] text-muted">
-          Será entregue na <strong className="font-semibold text-ink">Mesa {activeTableCode}</strong>
-        </p>
-      )}
-
-      <ul className="mt-5 divide-y divide-hairline border-y border-hairline">
+      <ul className="mt-7 divide-y divide-hairline border-y border-ink">
         {items.map((item) => (
           <li key={item.lineId} className="flex gap-3 py-4">
             <SmartImage
@@ -165,7 +167,10 @@ export default function CartPage() {
         ))}
       </ul>
 
-      <div className="mt-6 space-y-4">
+      <section className="mt-8 border-t border-ink pt-5">
+        <h2 className="font-display text-[24px]">Para identificar a mesa</h2>
+        <p className="mt-1 text-[13px] text-muted">Deixe seu nome e qualquer recado para a cozinha.</p>
+        <div className="mt-5 space-y-4">
         <Field label="Seu nome" hint="Ajuda o garçom a encontrar a mesa certa.">
           {(id) => (
             <Input
@@ -190,11 +195,12 @@ export default function CartPage() {
             />
           )}
         </Field>
-      </div>
+        </div>
+      </section>
 
-      <dl className="mt-6 space-y-1.5 border-t border-hairline pt-4 text-[15px]">
+      <dl className="mt-8 space-y-2 bg-ink p-5 text-[15px] text-paper">
         <div className="flex justify-between">
-          <dt className="text-muted">Subtotal</dt>
+          <dt className="text-paper/50">Subtotal</dt>
           <dd className="tabular">{formatMoney(subtotal, restaurant.currency)}</dd>
         </div>
         <div className="flex justify-between font-display text-[20px]">

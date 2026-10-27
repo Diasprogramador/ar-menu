@@ -20,16 +20,36 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Ver na minha mesa').last.click()
     page.get_by_role('button', name='Iniciar realidade aumentada', exact=True).click()
     expect(page.get_by_text('Aponte para a mesa e toque onde o prato deve ficar')).to_be_visible(timeout=60000)
-    page.evaluate("""() => {
-        window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',
-            {alpha: 0, beta: 30, gamma: 0}));
-        window.testStream = document.querySelector('video').srcObject;
-    }""")
+    # Do not synthesize a gyroscope reading: the universal fallback must remain
+    # placeable on browsers and low-end devices that expose only the camera.
+    page.evaluate("window.testStream = document.querySelector('video').srcObject")
     page.wait_for_timeout(500)
     target = page.evaluate('document.elementFromPoint(195, 422).tagName')
     page.mouse.click(195, 422)
     page.screenshot(path=str(OUT / 'camera.png'))
     expect(page.get_by_text('Aponte para a mesa e toque onde o prato deve ficar')).not_to_be_visible(timeout=5000)
+    expect(page.get_by_text('Arraste para girar · use dois dedos para aproximar')).to_be_visible()
+
+    # One pointer rotates without moving the anchor. Two pointers increase the
+    # relative scale, which is the universal fallback for devices without 6DoF.
+    page.evaluate("""() => {
+        const target = document.elementFromPoint(195, 422);
+        const fire = (type, id, x, y) => target.dispatchEvent(new PointerEvent(type, {
+            bubbles: true, pointerId: id, pointerType: 'touch', clientX: x, clientY: y,
+        }));
+        fire('pointerdown', 1, 140, 420);
+        fire('pointermove', 1, 260, 400);
+        fire('pointerup', 1, 260, 400);
+        fire('pointerdown', 1, 160, 420);
+        fire('pointerdown', 2, 230, 420);
+        fire('pointermove', 1, 120, 420);
+        fire('pointermove', 2, 270, 420);
+        fire('pointerup', 1, 120, 420);
+        fire('pointerup', 2, 270, 420);
+    }""")
+    scale_label = page.get_by_role('button', name='voltar ao 1:1')
+    expect(scale_label).not_to_contain_text('100%')
+    scaled_text = scale_label.inner_text()
     page.get_by_role('button', name='Ajustar escala', exact=True).click()
     expect(page.get_by_label('Distância do celular até a mesa')).to_be_visible()
     page.get_by_role('button', name='Posicionar em outro lugar', exact=True).click()
@@ -37,5 +57,5 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Fechar realidade aumentada').click()
     assert page.evaluate("window.testStream.getTracks().every(t => t.readyState === 'ended')")
     assert not errors, errors
-    (OUT / 'result.json').write_text(json.dumps({'camera': 'simulated', 'placement': 'passed', 'reposition': 'passed', 'cameraStopped': True, 'tapTarget': target, 'errors': errors}, indent=2))
+    (OUT / 'result.json').write_text(json.dumps({'camera': 'simulated', 'placement': 'passed', 'manualOrbit': 'passed', 'manualZoom': scaled_text, 'reposition': 'passed', 'cameraStopped': True, 'tapTarget': target, 'errors': errors}, indent=2))
     browser.close()

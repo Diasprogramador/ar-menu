@@ -778,10 +778,20 @@ function CameraLiveControls({
 
   return (
     <>
-      <div className="flex flex-1 items-center justify-center px-8">
+      <div
+        className={cn(
+          'flex flex-1 justify-center px-8',
+          colocado ? 'items-start pt-16' : 'items-center',
+        )}
+      >
         {!colocado && (
           <p className="rounded-full bg-black/45 px-4 py-2 text-center text-sm text-paper backdrop-blur-sm">
             Aponte para a mesa e toque onde o prato deve ficar
+          </p>
+        )}
+        {colocado && (
+          <p className="pointer-events-none rounded-full bg-black/45 px-4 py-2 text-center text-sm text-paper/85 backdrop-blur-sm">
+            Arraste para girar · use dois dedos para aproximar
           </p>
         )}
       </div>
@@ -805,9 +815,8 @@ function CameraLiveControls({
             {camera.alturaCm} cm — ajuste até o prato bater com o tamanho da sua mesa
           </p>
           <p className="mt-2 text-[12px] text-paper/50">
-            {camera.temGiroscopio
-              ? 'O prato fica ancorado enquanto você gira o celular. Caminhar em volta faz ele derivar.'
-              : 'Sem sensor de movimento neste aparelho: o prato fica fixo na tela.'}
+            Modo manual estável: o prato fica fixo na tela. Para caminhar ao redor e aproximar o
+            celular fisicamente, use um aparelho com WebXR/ARCore ou o Quick Look do iPhone.
           </p>
         </div>
       )}

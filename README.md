@@ -139,19 +139,20 @@ ou publique em qualquer host com HTTPS (Vercel, Netlify, Cloudflare Pages).
 |---|---|---|---|
 | 1 | WebXR `immersive-ar` | Serviços de RA do Google (Android) | superfície + translação |
 | 2 | AR Quick Look | iOS com `.usdz` no produto | superfície + translação |
-| 3 | **Câmera + giroscópio** | qualquer navegador com HTTPS e câmera | orientação |
+| 3 | **Câmera + controle manual** | qualquer navegador com HTTPS e câmera | posição visual fixa + gestos |
 | 4 | Visualizador 3D | WebGL | — |
 | 5 | Ficha com fotos | — | — |
 
-O caminho 3 é o que garante a promessa "escaneou o QR Code e vê na mesa" **sem
-instalar nada**. Boa parte dos Android não tem os Serviços de RA do Google, e o
-iOS não implementa WebXR — nesses casos o app abre a câmera diretamente,
-desenha o prato em tamanho físico correto sobre a imagem e o mantém ancorado
-pelo giroscópio enquanto a pessoa gira o aparelho.
+O caminho 3 garante uma visualização sobre a câmera **sem instalar nada**. Boa
+parte dos Android não tem os Serviços de RA do Google, e o iOS não implementa
+WebXR — nesses casos o app abre a câmera diretamente, posiciona o prato e congela
+a câmera virtual para impedir deriva. Um dedo gira o modelo e a pinça aproxima
+ou afasta.
 
-O que ele não faz, e a interface diz isso: acompanhar deslocamento. Sem SLAM
-não há como saber que o aparelho andou, então caminhar em volta da mesa faz o
-prato derivar. Girar no lugar funciona.
+O que ele não faz, e a interface diz isso: acompanhar deslocamento físico. Sem
+SLAM não há como saber que o aparelho andou. Caminhar ao redor e aproximar o
+celular fisicamente ficam disponíveis no WebXR/ARCore e no Quick Look; no modo
+universal, essas ações são feitas manualmente por gestos.
 
 Nenhum desses caminhos leva a uma tela quebrada, e o botão de adicionar ao
 pedido está presente em todos. Quando a câmera não abre, a tela mostra **"Por
@@ -228,10 +229,10 @@ toca em "Ver na minha mesa". Recharts idem, só no painel.
 
 ## Limitações conhecidas
 
-- **A câmera universal não acompanha deslocamento.** Ela ancora a orientação,
-  não a posição: girar o aparelho no lugar funciona, caminhar em volta da mesa
-  faz o prato derivar. Resolver isso exigiria SLAM em WebAssembly, que hoje só
-  existe em SDKs comerciais.
+- **A câmera universal não acompanha deslocamento físico.** Para não derivar,
+  ela congela a câmera virtual após o posicionamento e oferece órbita e zoom por
+  gestos. Rastreamento 6DoF real depende de WebXR/ARCore ou Quick Look; uma
+  alternativa realmente universal exigiria um marcador físico sobre a mesa.
 - **A escala na câmera universal pede um ajuste.** O navegador não expõe a
   distância focal, então assumimos um campo de visão típico e deixamos a altura
   do aparelho sobre a mesa num controle deslizante. Um gesto do cliente, uma

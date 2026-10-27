@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { applyPinch, clamp, scalePercentage, type PhysicalDimensions, type ScaleCalibration } from './scale';
+import { calculateManualOrbit } from './manualOrbit';
 import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } from '@/features/models3d/modelLoader';
 
 /**
@@ -20,11 +21,11 @@ import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } fro
  *
  * O que ele entrega e o que não entrega, dito com clareza:
  *
- *   entrega   o prato apoiado numa superfície, no tamanho físico correto, que
- *             fica parado no lugar enquanto a pessoa gira o celular;
- *   não       rastreamento de translação. Andar em volta da mesa faz o prato
- *             derivar, porque sem SLAM não há como saber que o aparelho se
- *             deslocou. Girar no lugar funciona; caminhar, não.
+ *   entrega   posicionamento visual estável, rotação manual em 360° e zoom por
+ *             pinça em qualquer navegador com câmera e WebGL;
+ *   não       rastreamento físico de translação. Depois do posicionamento a
+ *             câmera virtual congela para impedir deriva. Andar com o aparelho
+ *             move apenas o vídeo ao fundo; WebXR/Quick Look cuidam do 6DoF.
  *
  * Por isso ele fica abaixo do WebXR e do Quick Look na ordem de preferência:
  * onde existe rastreamento de verdade, usamos rastreamento de verdade.
@@ -102,7 +103,6 @@ export function useCameraSession({
   const [calibration, setCalibration] = useState<ScaleCalibration | null>(null);
   const [scalePercent, setScalePercent] = useState(100);
   const [alturaCm, setAlturaCm] = useState(ALTURA_PADRAO_CM);
-  const [temGiroscopio, setTemGiroscopio] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -296,6 +296,10 @@ export function useCameraSession({
       0.01,
       30,
     );
+    // Posição inicial utilizável mesmo sem giroscópio: a câmera olha 30° para
+    // baixo e o raio encontra o plano da mesa. Quando há sensor, a primeira
+    // leitura substitui esta orientação antes do posicionamento.
+    camera.rotation.x = -Math.PI / 6;
 
 
     // Mapa de ambiente: sem ele, `clearcoat` e `roughness` baixa não têm o que
@@ -385,17 +389,21 @@ export function useCameraSession({
       const atual = runtime.current;
       if (!atual || evento.alpha === null || evento.beta === null || evento.gamma === null) return;
 
-      setTemGiroscopio(true);
       const giroDaTela = THREE.MathUtils.degToRad(
         (screen.orientation?.angle ?? 0) as number,
       );
-      aplicarOrientacao(
-        atual.camera.quaternion,
-        THREE.MathUtils.degToRad(evento.alpha),
-        THREE.MathUtils.degToRad(evento.beta),
-        THREE.MathUtils.degToRad(evento.gamma),
-        giroDaTela,
-      );
+      // Antes do posicionamento, o sensor ajuda a mirar o plano. Depois dele,
+      // congelamos a câmera virtual. Sem posição 6DoF, continuar aplicando o
+      // giroscópio faria o prato derivar apesar de estar "ancorado".
+      if (!atual.colocado) {
+        aplicarOrientacao(
+          atual.camera.quaternion,
+          THREE.MathUtils.degToRad(evento.alpha),
+          THREE.MathUtils.degToRad(evento.beta),
+          THREE.MathUtils.degToRad(evento.gamma),
+          giroDaTela,
+        );
+      }
     };
 
     window.addEventListener('deviceorientation', aoGirar, true);
@@ -439,6 +447,13 @@ export function useCameraSession({
     let distanciaInicial = 0;
     let escalaInicial = 1;
     let arrastou = false;
+    let inicioX = 0;
+    let inicioY = 0;
+    let rotacaoInicialX = 0;
+    let rotacaoInicialY = 0;
+
+    const touchActionAnterior = superficie.style.touchAction;
+    superficie.style.touchAction = 'none';
 
     const distanciaEntre = () => {
       const [a, b] = [...ponteiros.values()];
@@ -450,6 +465,19 @@ export function useCameraSession({
       if (evento.target instanceof Element && evento.target.closest('[data-ar-control]')) return;
       ponteiros.set(evento.pointerId, { x: evento.clientX, y: evento.clientY });
       arrastou = false;
+      try {
+        superficie.setPointerCapture?.(evento.pointerId);
+      } catch {
+        // Eventos sintetizados e alguns WebViews não registram o ponteiro no
+        // subsistema nativo; os listeners no contêiner ainda funcionam.
+      }
+      const atual = runtime.current;
+      if (ponteiros.size === 1 && atual?.colocado) {
+        inicioX = evento.clientX;
+        inicioY = evento.clientY;
+        rotacaoInicialX = atual.modelo.rotation.x;
+        rotacaoInicialY = atual.modelo.rotation.y;
+      }
       if (ponteiros.size === 2) {
         distanciaInicial = distanciaEntre();
         escalaInicial = runtime.current?.escalaRelativa ?? 1;
@@ -463,9 +491,19 @@ export function useCameraSession({
       if (!atual) return;
 
       if (ponteiros.size === 1 && atual.colocado) {
+        const deltaX = evento.clientX - inicioX;
+        const deltaY = evento.clientY - inicioY;
+        if (Math.hypot(deltaX, deltaY) < 3) return;
         arrastou = true;
-        const ponto = projetarNoPlano(evento.clientX, evento.clientY);
-        if (ponto) atual.modelo.position.set(ponto.x, -atual.alturaMetros, ponto.z);
+        const orbit = calculateManualOrbit({
+          startYaw: rotacaoInicialY,
+          startPitch: rotacaoInicialX,
+          deltaX,
+          deltaY,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        });
+        atual.modelo.rotation.set(orbit.pitch, orbit.yaw, 0);
       } else if (ponteiros.size === 2 && distanciaInicial > 0) {
         arrastou = true;
         const gesto = distanciaEntre() / distanciaInicial;
@@ -484,6 +522,11 @@ export function useCameraSession({
     const aoSoltar = (evento: PointerEvent) => {
       const eraUnico = ponteiros.size === 1;
       ponteiros.delete(evento.pointerId);
+      try {
+        superficie.releasePointerCapture?.(evento.pointerId);
+      } catch {
+        /* o ponteiro pode já ter sido liberado pelo navegador */
+      }
       distanciaInicial = 0;
 
       const atual = runtime.current;
@@ -507,11 +550,23 @@ export function useCameraSession({
     superficie.addEventListener('pointermove', aoMover);
     superficie.addEventListener('pointerup', aoSoltar);
     superficie.addEventListener('pointercancel', aoSoltar);
+    const aoRolar = (evento: WheelEvent) => {
+      const atual = runtime.current;
+      if (!atual?.colocado) return;
+      evento.preventDefault();
+      const relativa = clamp(atual.escalaRelativa * Math.exp(-evento.deltaY * 0.0015), 0.5, 2);
+      atual.escalaRelativa = relativa;
+      atual.modelo.scale.setScalar(relativa);
+      setScalePercent(scalePercentage(atual.calibration.baseScale * relativa, atual.calibration.baseScale));
+    };
+    superficie.addEventListener('wheel', aoRolar, { passive: false });
     limpezas.push(() => {
+      superficie.style.touchAction = touchActionAnterior;
       superficie.removeEventListener('pointerdown', aoPressionar);
       superficie.removeEventListener('pointermove', aoMover);
       superficie.removeEventListener('pointerup', aoSoltar);
       superficie.removeEventListener('pointercancel', aoSoltar);
+      superficie.removeEventListener('wheel', aoRolar);
     });
 
     // ---- laço de render ----
@@ -553,7 +608,6 @@ export function useCameraSession({
     calibration,
     scalePercent,
     alturaCm,
-    temGiroscopio,
     videoRef,
     canvasHostRef,
     start,

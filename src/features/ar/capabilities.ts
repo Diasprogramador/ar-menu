@@ -12,12 +12,11 @@
  *   2. Quick Look          — iOS/Safari. O sistema abre o visualizador nativo a
  *                            partir de um arquivo USDZ, com rastreamento
  *                            completo. Exige `usdz_url` no produto.
- *   3. Câmera + giroscópio — universal: funciona em qualquer navegador com
- *                            HTTPS, câmera e WebGL, sem instalar nada. O prato
- *                            aparece na mesa em tamanho real e fica ancorado
- *                            enquanto a pessoa gira o aparelho. Não acompanha
- *                            deslocamento, porque sem SLAM não há como saber
- *                            que o aparelho andou.
+ *   3. Câmera + controle manual — universal: funciona em qualquer navegador com
+ *                            HTTPS, câmera e WebGL, sem instalar nada. Depois
+ *                            de posicionado, o prato fica estável na tela e o
+ *                            usuário gira/aproxima por gestos. Não acompanha
+ *                            deslocamento físico sem SLAM.
  *   4. Visualizador 3D     — quando não há câmera ou a permissão foi negada.
  *                            Mantém rotação, zoom limitado, dimensões e o botão
  *                            de adicionar ao pedido.

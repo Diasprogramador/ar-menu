@@ -116,9 +116,9 @@ produto promete que basta escanear o QR Code, então não pode terminar em "vá 
 loja e instale um aplicativo".
 
 Ele usa apenas o que qualquer navegador oferece: `getUserMedia` para a imagem da
-câmera, `deviceorientation` para a atitude do aparelho e WebGL para desenhar o
-prato por cima. O modelo é ancorado num plano horizontal abaixo da câmera, e a
-orientação do sensor mantém a cena estável enquanto a pessoa gira o celular.
+câmera, `deviceorientation` para ajudar a mirar antes do posicionamento e WebGL
+para desenhar o prato por cima. Depois do toque, a câmera virtual congela para
+eliminar a deriva: um dedo orbita o modelo e a pinça aproxima ou afasta.
 
 **A escala continua real.** Conhecendo o campo de visão e a distância até o
 plano, o tamanho em pixels de um objeto de dimensão física conhecida está
@@ -128,11 +128,11 @@ caem — e deixamos a altura do celular sobre a mesa num controle deslizante. O
 cliente ajusta uma vez, olhando para a própria mesa, e o erro residual do campo
 de visão é absorvido nesse gesto.
 
-**O que ele não faz:** rastrear translação. Sem SLAM, o navegador não sabe que o
-aparelho se deslocou, então caminhar em volta da mesa faz o prato derivar. A
-interface diz isso em vez de deixar o cliente achar que quebrou. É também a
-razão de este caminho ficar *abaixo* do WebXR e do Quick Look na ordem: onde há
-rastreamento de verdade, usamos rastreamento de verdade.
+**O que ele não faz:** rastrear translação física. Sem SLAM, o navegador não sabe
+que o aparelho se deslocou. Em vez de fingir essa capacidade e deixar o prato
+derivar, o fallback mantém a composição fixa na tela e oferece órbita/zoom por
+gestos. É também a razão de este caminho ficar *abaixo* do WebXR e do Quick Look
+na ordem: onde há rastreamento de verdade, usamos rastreamento de verdade.
 
 ### Falha recuperável não desce um degrau
 

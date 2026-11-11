@@ -12,6 +12,9 @@ with sync_playwright() as playwright:
     page.goto(menu + "/mesa/07")
     page.locator('a[href$="/produto/smash-bacon"]').first.click()
     expect(page.get_by_role("heading", name="Smash Bacon", exact=True)).to_be_visible()
+    # Exercise a return visit after the initial precache finishes, including on slower networks.
+    page.wait_for_function("async () => !!(await navigator.serviceWorker.getRegistration())?.active", timeout=90000)
+    page.reload()
     page.wait_for_function("!!navigator.serviceWorker.controller")
     for slug in ("Smash%20Bacon", "smash%E2%80%91bacon", "smash-bacon.", "smash-bacon?origem=qr"):
         page.goto(menu + "/produto/" + slug)

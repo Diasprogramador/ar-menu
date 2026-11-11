@@ -1,5 +1,6 @@
 /** Validate the actual demo assets, their dimensions and Quick Look ZIP packing. */
 import assert from 'node:assert/strict';
+import './lib/node-textures.mjs';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -26,13 +27,23 @@ for (const product of demoProducts) {
   });
   let triangles = 0;
   let meshes = 0;
+  const texturedIngredients = new Set();
   scene.traverse((object) => {
     if (!object.isMesh) return;
     meshes++;
+    if (object.material.map?.image?.width && object.material.normalMap?.image?.width) {
+      assert(object.geometry.attributes.uv, product.slug + ': missing ingredient UVs');
+      texturedIngredients.add(object.material.name);
+    }
     triangles += (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3;
     for (const value of object.geometry.attributes.position.array) assert(Number.isFinite(value));
   });
   assert(triangles > 0 && triangles <= 60000, `${product.slug}: triangle budget`);
+  if (['smash-bacon', 'smash-duplo-cheddar', 'burger-da-casa'].includes(product.slug)) {
+    for (const name of ['REAL-brioche-assado', 'REAL-carne-selada', 'REAL-queijo-derretido']) {
+      assert(texturedIngredients.has(name), product.slug + ': missing surface ' + name);
+    }
+  }
   const usdz = readFileSync(`public${model.usdz_url}`);
   let cursor = 0;
   let entries = 0;

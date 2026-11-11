@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
-import { detectARCapabilities } from './capabilities';
+import { isTableHit, tableDistance } from './tableDistance';
 import { applyPinch, clamp, scalePercentage, type PhysicalDimensions, type ScaleCalibration } from './scale';
 import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } from '@/features/models3d/modelLoader';
 
@@ -66,6 +66,7 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
   const [calibration, setCalibration] = useState<ScaleCalibration | null>(null);
   const [scalePercent, setScalePercent] = useState(100);
   const [surfaceFound, setSurfaceFound] = useState(false);
+  const [distance, setDistance] = useState<ReturnType<typeof tableDistance>>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -84,12 +85,17 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     cleanup: (() => void)[];
   } | null>(null);
 
+  const generation = useRef(0);
+  const startingSession = useRef<XRSessionLike | null>(null);
   const emit = useRef(onEvent);
   useEffect(() => {
     emit.current = onEvent;
   }, [onEvent]);
 
   const teardown = useCallback(() => {
+    generation.current++;
+    void startingSession.current?.end().catch(() => undefined);
+    startingSession.current = null;
     const current = runtime.current;
     if (!current) return;
     runtime.current = null;
@@ -102,7 +108,8 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
       }
     }
 
-    current.hitTestSource?.cancel();
+    // Ending a native session can invalidate its hit source before the end event.
+    try { current.hitTestSource?.cancel(); } catch { /* already inactive */ }
     current.renderer.setAnimationLoop(null);
     current.scene.clear();
     current.renderer.dispose();
@@ -120,6 +127,7 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     teardown();
     setStatus('idle');
     setSurfaceFound(false);
+    setDistance(null);
     emit.current?.({ type: 'exited' });
   }, [teardown]);
 
@@ -130,6 +138,8 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     current.placed = false;
     current.model.visible = false;
     current.reticle.visible = false;
+    setSurfaceFound(false);
+    setDistance(null);
     setStatus('scanning');
   }, []);
 
@@ -143,45 +153,11 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
 
   const start = useCallback(async () => {
     setError(null);
+    setDistance(null);
     setStatus('checking');
     emit.current?.({ type: 'opened' });
 
-    const capabilities = await detectARCapabilities();
-    if (!capabilities.immersiveAR) {
-      const failure: ARSessionError = {
-        kind: 'unsupported',
-        message: 'Este aparelho não suporta a realidade aumentada imersiva.',
-        ...(capabilities.reason ? { hint: capabilities.reason } : {}),
-      };
-      setError(failure);
-      setStatus('error');
-      emit.current?.({ type: 'failed', reason: failure.kind });
-      return;
-    }
-
-    // Modelo primeiro: pedir a câmera e só então descobrir que o arquivo não
-    // carrega seria a pior ordem possível para o usuário.
-    setStatus('loading-model');
-    let prepared;
-    try {
-      const loaded = await loadGltf(modelUrl, { onProgress: setProgress });
-      prepared = prepareModel(loaded, dimensions, placement);
-      setCalibration(prepared.calibration);
-    } catch (loadError) {
-      const failure: ARSessionError = {
-        kind: 'model',
-        message:
-          loadError instanceof ModelLoadError
-            ? loadError.message
-            : 'Não foi possível carregar o modelo 3D deste prato.',
-        hint: 'Você ainda pode ver as fotos e as dimensões do prato.',
-      };
-      setError(failure);
-      setStatus('error');
-      emit.current?.({ type: 'failed', reason: 'model' });
-      return;
-    }
-
+    const id = ++generation.current;
     setStatus('requesting');
 
     const overlayRoot = overlayRef.current;
@@ -193,6 +169,7 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
         ...(overlayRoot ? { domOverlay: { root: overlayRoot } } : {}),
       })) as XRSessionLike;
     } catch (sessionError) {
+      if (id !== generation.current) return;
       const denied =
         sessionError instanceof DOMException &&
         (sessionError.name === 'NotAllowedError' || sessionError.name === 'SecurityError');
@@ -210,6 +187,43 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
       setError(failure);
       setStatus('error');
       emit.current?.({ type: 'failed', reason: failure.kind });
+      return;
+    }
+
+    if (id !== generation.current) {
+      void session.end().catch(() => undefined);
+      return;
+    }
+    startingSession.current = session;
+    const endDuringLoad = () => {
+      if (generation.current !== id) return;
+      generation.current++;
+      startingSession.current = null;
+      setStatus('idle');
+    };
+    session.addEventListener('end', endDuringLoad, { once: true });
+
+    setStatus('loading-model');
+    let prepared;
+    try {
+      const loaded = await loadGltf(modelUrl, { onProgress: setProgress });
+      if (id !== generation.current) return;
+      prepared = prepareModel(loaded, dimensions, placement);
+      setCalibration(prepared.calibration);
+    } catch (loadError) {
+      if (id !== generation.current) return;
+      teardown();
+      const failure: ARSessionError = {
+        kind: 'model',
+        message:
+          loadError instanceof ModelLoadError
+            ? loadError.message
+            : 'Não foi possível carregar o modelo 3D deste prato.',
+        hint: 'Você ainda pode ver as fotos e as dimensões do prato.',
+      };
+      setError(failure);
+      setStatus('error');
+      emit.current?.({ type: 'failed', reason: 'model' });
       return;
     }
 
@@ -252,33 +266,32 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     model.visible = false;
     scene.add(model);
 
-    await renderer.xr.setSession(session as unknown as XRSession);
-
-    const viewerSpace = await session.requestReferenceSpace('viewer');
-    const localSpace = renderer.xr.getReferenceSpace();
-
-    // `requestHitTestSource` só existe quando a feature foi concedida na sessão
+    let localSpace: XRReferenceSpace | null;
     let hitTestSource: XRHitTestSource | null = null;
-    const requestHitTestSource: ((options: { space: XRSpace }) => Promise<XRHitTestSource>) | undefined =
-      session.requestHitTestSource?.bind(session);
-    if (requestHitTestSource) {
-      hitTestSource = await requestHitTestSource({ space: viewerSpace }).catch(() => null);
+    try {
+      await renderer.xr.setSession(session);
+      const viewerSpace = await session.requestReferenceSpace('viewer');
+      localSpace = renderer.xr.getReferenceSpace();
+      hitTestSource = await session.requestHitTestSource?.({ space: viewerSpace }) ?? null;
+    } catch {
+      localSpace = null;
     }
-
-    if (!hitTestSource) {
-      setError({
-        kind: 'session',
-        message: 'Este aparelho não conseguiu detectar superfícies.',
-        hint: 'Você pode ver o prato em 3D com as dimensões reais.',
-      });
-      setStatus('error');
-      emit.current?.({ type: 'failed', reason: 'hit-test' });
-      void session.end().catch(() => undefined);
+    if (!localSpace || !hitTestSource || id !== generation.current) {
+      session.removeEventListener('end', endDuringLoad);
+      ambiente.dispose();
+      pmrem.dispose();
       renderer.dispose();
       renderer.domElement.remove();
+      if (id !== generation.current) return;
+      teardown();
+      setError({ kind: 'session', message: 'Este aparelho não conseguiu detectar superfícies.' });
+      setStatus('error');
+      emit.current?.({ type: 'failed', reason: 'hit-test' });
       return;
     }
 
+    session.removeEventListener('end', endDuringLoad);
+    startingSession.current = null;
     const cleanup: (() => void)[] = [];
     // O mapa de ambiente é uma textura de GPU: sem liberar, cada sessão de AR
     // deixa uma para trás.
@@ -332,6 +345,11 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
 
     // ----- gestos sobre o overlay -----
     if (overlayRoot) {
+      const suppressControlSelection = (event: Event) => {
+        if (event.target instanceof Element && event.target.closest('[data-ar-control]')) event.preventDefault();
+      };
+      overlayRoot.addEventListener('beforexrselect', suppressControlSelection);
+      cleanup.push(() => overlayRoot.removeEventListener('beforexrselect', suppressControlSelection));
       const pointers = new Map<number, { x: number; y: number }>();
       let pinchStartDistance = 0;
       let pinchStartScale = 1;
@@ -406,24 +424,28 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     }
 
     // ----- loop de render -----
-    renderer.setAnimationLoop((_time, frame) => {
+    let nextReading = 0;
+    const surface = new THREE.Vector3();
+    renderer.setAnimationLoop((time, frame) => {
       const current = runtime.current;
       if (!current || !frame) return;
 
+      const viewer = localSpace && frame.getViewerPose(localSpace);
       if (!current.placed && localSpace && current.hitTestSource) {
         const results = frame.getHitTestResults(current.hitTestSource as unknown as globalThis.XRHitTestSource);
-        const hit = results[0];
-        if (hit) {
-          const pose = hit.getPose(localSpace);
-          if (pose) {
-            current.reticle.visible = true;
-            current.reticle.matrix.fromArray(pose.transform.matrix);
-            setSurfaceFound(true);
-          }
-        } else {
-          current.reticle.visible = false;
-          setSurfaceFound(false);
-        }
+        const pose = results[0]?.getPose(localSpace);
+        current.reticle.visible = isTableHit(viewer, pose);
+        if (current.reticle.visible && pose) current.reticle.matrix.fromArray(pose.transform.matrix);
+        setSurfaceFound(current.reticle.visible);
+      }
+
+      if (!viewer || viewer.emulatedPosition || (!current.placed && !current.reticle.visible)) {
+        setDistance(null);
+        nextReading = 0;
+      } else if (time >= nextReading) {
+        const target = current.placed ? current.model.position : surface.setFromMatrixPosition(current.reticle.matrix);
+        setDistance(tableDistance(viewer.transform.position, target));
+        nextReading = time + 200;
       }
 
       renderer.render(current.scene, current.camera);
@@ -440,6 +462,7 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     calibration,
     scalePercent,
     surfaceFound,
+    distance,
     overlayRef,
     start,
     stop,

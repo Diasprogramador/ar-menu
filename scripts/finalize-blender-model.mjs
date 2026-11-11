@@ -6,6 +6,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { USDZExporter } from 'three/addons/exporters/USDZExporter.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import './lib/node-textures.mjs';
+import { applyIngredientSurface } from './lib/ingredient-surfaces.mjs';
+import { demoProducts } from '../src/features/menu/demoData.ts';
 
 globalThis.FileReader ??= class {
   readAsArrayBuffer(blob) {
@@ -44,6 +47,13 @@ group.name = slug;
 group.add(scene);
 scene.position.sub(new THREE.Vector3(center.x, bounds.min.y, center.z));
 group.updateMatrixWorld(true);
+// Both native Quick Look and the web renderer use the registered serving footprint.
+const spec = demoProducts.find(product => product.product_models?.model_url.split('?')[0].endsWith('/' + slug + '.glb'))?.product_models;
+if (!spec) throw new Error('Missing registered serving size for ' + slug);
+const authored = bounds.getSize(new THREE.Vector3());
+group.scale.set((spec.width_cm ?? spec.diameter_cm)/(100*authored.x),
+  spec.height_cm/(100*authored.y), (spec.depth_cm ?? spec.diameter_cm)/(100*authored.z));
+group.updateMatrixWorld(true);
 const size = new THREE.Box3().setFromObject(group, true).getSize(new THREE.Vector3());
 if (size.toArray().some((value) => !Number.isFinite(value) || value < .001 || value > .5)) {
   throw new Error(`Unexpected menu-item dimensions: ${size.toArray()}`);
@@ -51,6 +61,7 @@ if (size.toArray().some((value) => !Number.isFinite(value) || value < .001 || va
 let triangles = 0;
 group.traverse((object) => {
   if (object.isMesh) {
+    applyIngredientSurface(object);
     triangles += (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3;
     object.material.side = THREE.FrontSide;
   }

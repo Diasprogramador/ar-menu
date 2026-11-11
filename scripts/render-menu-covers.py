@@ -119,9 +119,9 @@ def render_cover(slug, model_name):
     target = Vector((0, 0, max(size.z * 0.42, center.z * 0.86)))
     # Power follows the physical footprint. The GLBs are in meters, so fixed
     # studio wattages would overexpose a 15 cm burger by several stops.
-    add_area("Softbox", Vector((-span * 1.5, -span * 1.7, span * 2.4)), target, 55 * span * span, span * 1.8, (1.0, 0.76, 0.55))
+    add_area("Softbox", Vector((-span * 1.5, -span * 1.7, span * 2.4)), target, 88 * span * span, span * 1.6, (1.0, 0.91, 0.79))
     add_area("Fill", Vector((span * 1.7, -span * 0.6, span * 1.3)), target, 22 * span * span, span * 2.1, (0.65, 0.76, 1.0))
-    add_area("Ember rim", Vector((span * 0.7, span * 1.5, span * 1.5)), target, 36 * span * span, span * 1.2, (1.0, 0.18, 0.055))
+    add_area("Warm rim", Vector((span * 0.7, span * 1.5, span * 1.5)), target, 42 * span * span, span * 1.2, (1.0, 0.76, 0.51))
 
     camera_data = bpy.data.cameras.new("Menu cover camera")
     camera_data.lens = 58
@@ -129,7 +129,7 @@ def render_cover(slug, model_name):
     scene.collection.objects.link(camera)
     scene.camera = camera
     direction = Vector((1.15, -1.55, 0.92)).normalized()
-    distance = radius / max(math.sin(camera_data.angle_y / 2), 0.1) * 1.28
+    distance = radius / max(math.sin(camera_data.angle_y / 2), 0.1) * .96
     camera.location = target + direction * distance
     look_at(camera, target)
 
@@ -149,6 +149,8 @@ def render_cover(slug, model_name):
 
 
 for product_slug, glb_name in PRODUCTS.items():
+    if globals().get("ONLY") and glb_name not in ONLY:
+        continue
     render_cover(product_slug, glb_name)
 
 print("Rendered", len(PRODUCTS), "menu covers to", OUT)

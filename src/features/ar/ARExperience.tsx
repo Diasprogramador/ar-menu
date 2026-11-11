@@ -4,6 +4,7 @@ import { detectARCapabilities, resolveARMode, type ARCapabilities, type ARMode }
 import { useARSession } from './useARSession';
 import { useCameraSession } from './useCameraSession';
 import { ModelViewer3D } from '@/features/models3d/ModelViewer3D';
+import { catalogAssetUrl } from '@/features/models3d/modelLoader';
 import { Button, Spinner } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatDimensions, formatMoney } from '@/lib/format';
@@ -200,6 +201,12 @@ export function ARExperience({
           >
             Abrir em realidade aumentada
           </Button>
+          {capabilities.camera && capabilities.webgl && capabilities.secureContext && (
+            <button type="button" className="mt-4 px-3 py-2 text-sm text-paper underline"
+              onClick={() => setMode('camera')}>
+              Estimar distância com uma régua
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -364,7 +371,7 @@ function abrirQuickLook(usdzUrl: string, imagemDoPrato: string | null): void {
   link.rel = 'ar';
   // `#allowsContentScaling=0` impede que o cliente redimensione o prato no
   // visualizador da Apple: a promessa é tamanho real, não maquete ajustável.
-  link.href = `${usdzUrl}#allowsContentScaling=0`;
+  link.href = `${catalogAssetUrl(usdzUrl)}#allowsContentScaling=0`;
 
   const imagem = document.createElement('img');
   imagem.src = imagemDoPrato ?? '';
@@ -681,6 +688,11 @@ function ARLiveControls({
         )}
       </div>
 
+      {session.distance && (
+        <p className="mx-auto mb-3 rounded-full bg-black/65 px-4 py-2 text-center text-sm text-paper">
+          Altura sobre a mesa ≈ {session.distance.heightCm} cm · Até o ponto ≈ {session.distance.rangeCm} cm
+        </p>
+      )}
       {showInfo && (
         <div
           data-ar-control
@@ -755,10 +767,7 @@ function ARLiveControls({
 /**
  * Controles sobre a câmera no modo universal.
  *
- * O ajuste de altura é o que torna a escala verdadeira e não estimada: sabendo
- * o campo de visão e a distância até a mesa, o tamanho em tela de um prato de
- * dimensão conhecida está determinado. A altura é a única incógnita, e o
- * cliente a resolve num gesto, olhando para a própria mesa.
+ * O usuário pode calibrar a câmera com uma régua ou informar a altura.
  */
 function CameraLiveControls({
   camera,
@@ -786,7 +795,7 @@ function CameraLiveControls({
       >
         {!colocado && (
           <p className="rounded-full bg-black/45 px-4 py-2 text-center text-sm text-paper backdrop-blur-sm">
-            Aponte para a mesa e toque onde o prato deve ficar
+            {camera.referenceHint ?? 'Aponte para a mesa e toque onde o prato deve ficar'}
           </p>
         )}
         {colocado && (
@@ -796,10 +805,26 @@ function CameraLiveControls({
         )}
       </div>
 
+      {camera.distance && camera.heightKnown && (
+        <p className="mx-auto mb-2 rounded-full bg-black/65 px-4 py-2 text-center text-sm text-paper">
+          Distância estimada ≈ {camera.distance.rangeCm} cm · altura usada {camera.distance.heightCm} cm
+        </p>
+      )}
+      {colocado && !camera.heightKnown && (
+        <p className="mx-auto mb-2 rounded-full bg-black/65 px-4 py-2 text-center text-sm text-paper">
+          Calibre a câmera para estimar a distância até o prato.
+        </p>
+      )}
+      {!camera.referenceHint && (
+        <button type="button" data-ar-control className="mx-auto mb-2 rounded-full bg-black/65 px-4 py-2 text-sm text-paper"
+          onClick={() => { setMostrarAjuste(false); camera.calibrateReference(); }}>
+          Calibrar distância com uma régua
+        </button>
+      )}
       {mostrarAjuste && (
         <div data-ar-control className="mx-4 mb-3 rounded-[10px] bg-black/65 p-4 backdrop-blur-sm">
           <label htmlFor="altura-mesa" className="text-[13px] text-paper">
-            Distância do celular até a mesa
+            Altura do celular sobre a mesa
           </label>
           <input
             id="altura-mesa"
@@ -812,7 +837,7 @@ function CameraLiveControls({
             className="mt-2 w-full accent-[#FF6B2C]"
           />
           <p className="tabular mt-1 text-[13px] text-paper/65">
-            {camera.alturaCm} cm — ajuste até o prato bater com o tamanho da sua mesa
+            {Math.round(camera.alturaCm)} cm · Informe a altura para estimar o tamanho na câmera.
           </p>
           <p className="mt-2 text-[12px] text-paper/50">
             Modo manual estável: o prato fica fixo na tela. Para caminhar ao redor e aproximar o

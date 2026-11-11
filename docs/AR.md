@@ -120,13 +120,18 @@ câmera, `deviceorientation` para ajudar a mirar antes do posicionamento e WebGL
 para desenhar o prato por cima. Depois do toque, a câmera virtual congela para
 eliminar a deriva: um dedo orbita o modelo e a pinça aproxima ou afasta.
 
-**A escala continua real.** Conhecendo o campo de visão e a distância até o
-plano, o tamanho em pixels de um objeto de dimensão física conhecida está
-determinado. O navegador não expõe a distância focal da câmera, então assumimos
-um campo de visão horizontal de 66° — a faixa em que quase todos os aparelhos
-caem — e deixamos a altura do celular sobre a mesa num controle deslizante. O
-cliente ajusta uma vez, olhando para a própria mesa, e o erro residual do campo
-de visão é absorvido nesse gesto.
+Em WebXR, o ponto de apoio e a câmera usam o mesmo espaço métrico. A interface
+mostra a diferença vertical e a distância em linha reta até o ponto visado ou
+posicionado. Leituras sem rastreamento e superfícies muito inclinadas são descartadas.
+No Quick Look, o visualizador da Apple controla a colocação.
+
+Na câmera comum, a distância é uma estimativa. O cliente pode informar a altura
+ou apoiar uma régua na mesa e tocar nas marcas de 0 e 10 cm mantendo a câmera
+paralela ao tampo. O sistema ajusta a altura pela razão entre o comprimento
+conhecido e o comprimento projetado. A distância exibida se refere ao instante
+do toque. Sem calibração, a projeção parte de 38 cm de altura. O cálculo parte
+de 66° no eixo maior do vídeo e considera o recorte da prévia na tela.
+Mudar a altura física do celular exige uma nova calibração.
 
 **O que ele não faz:** rastrear translação física. Sem SLAM, o navegador não sabe
 que o aparelho se deslocou. Em vez de fingir essa capacidade e deixar o prato

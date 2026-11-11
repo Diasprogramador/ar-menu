@@ -102,6 +102,10 @@ export function measureModel(object: THREE.Object3D): BoundingBoxSize {
  * pegava do cache a promise que o primeiro acabara de rejeitar. Quem desmonta
  * apenas ignora o resultado; o download em curso ainda alimenta o cache.
  */
+export function catalogAssetUrl(url: string) {
+  return /^\/demo-models\/[\w-]+\.(glb|usdz)$/.test(url) ? url + '?v=ingredient-surfaces' : url;
+}
+
 export function loadGltf(
   url: string,
   options: { onProgress?: (ratio: number) => void } = {},
@@ -121,7 +125,7 @@ export function loadGltf(
     }, LOAD_TIMEOUT_MS);
 
     getLoader().load(
-      url,
+      catalogAssetUrl(url),
       (gltf) => {
         window.clearTimeout(timeout);
 

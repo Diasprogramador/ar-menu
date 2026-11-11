@@ -23,7 +23,7 @@ const expression = [
   `exec(compile(open(PROJECT_ROOT+r'/scripts/blender-realistic-catalog.py', encoding='utf-8').read(), 'blender-realistic-catalog.py', 'exec'))`,
 ].filter(Boolean).join('; ');
 
-const generated = spawnSync(blender, ['--background', '--python-expr', expression], {
+const generated = spawnSync(blender, ['--background', '--python-exit-code', '1', '--python-expr', expression], {
   cwd: root,
   stdio: 'inherit',
 });

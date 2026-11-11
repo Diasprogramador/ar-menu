@@ -50,7 +50,7 @@ def palette():
     return {
         "plate": material("porcelana", (.78, .79, .76), .16, .45),
         "dark_plate": material("ceramica-escura", (.045, .055, .052), .22, .35),
-        "bread": material("brioche-assado", (.64, .30, .075), .44, .25),
+        "bread": material("brioche-assado", (.64, .30, .075), .52, .10),
         "crumb": material("miolo", (.88, .68, .37), .9),
         "sesame": material("gergelim", (.88, .72, .42), .66),
         "meat": material("carne-selada", (.15, .032, .012), .68, .18),
@@ -224,22 +224,26 @@ def leaf(name, pos, length, width, mat, angle=0, lift=.008):
 
 def sesame_on_bun(radius, z, height, count=26):
     for i in range(count):
-        a = i * 2.399 + .3
-        rr = radius * math.sqrt((i + 1) / (count + 2)) * .82
+        a = i * 2.399 + rng.uniform(-.32, .32)
+        rr = radius * math.sqrt((i + rng.random()) / count) * .96
         dome = math.sqrt(max(0, 1 - (rr / radius) ** 2))
         ob = ellipsoid("Gergelim", (rr*math.cos(a), rr*math.sin(a), z + dome*height + .0008),
             (.0022, .0011, .00065), P["sesame"], segments=8, rings=5)
-        ob.rotation_euler.z = a
+        ob.rotation_euler = (0, math.atan2(rr / radius * height, radius * dome), a)
 
 
 def melted_cheese_sheet(name, radius, z, angle):
-    n=8; side=radius*1.78; verts=[]; faces=[]
+    n=18; side=radius*2.01; verts=[]; faces=[]
     for iy in range(n+1):
         for ix in range(n+1):
             x=(ix/n-.5)*side; y=(iy/n-.5)*side
             edge=max(abs(x),abs(y))/(side*.5)
-            corner=min(1, math.hypot(x,y)/(side*.60))
-            droop=max(0,edge-.58)**1.6*.012 + max(0,corner-.82)**1.5*.010
+            radial=math.hypot(x,y)
+            overhang=max(0, radial-radius*.89)
+            droop=overhang*.83 + max(0,edge-.68)**2*.012
+            if radial:
+                x *= 1-overhang*.57/radial
+                y *= 1-overhang*.57/radial
             ripple=math.sin(x*90+iy)*.0006+math.sin(y*75+ix)*.00045
             verts.append((x,y,z-droop+ripple))
     for iy in range(n):
@@ -260,8 +264,15 @@ def burger(slug, layers):
     for idx, layer in enumerate(layers):
         if layer == "patty":
             h = .013 if "smash" in slug else .019
-            lathe("Carne", [(0, z), (r*.78, z), (r*1.01, z+.001), (r*1.045, z+h*.16),
-                (r*1.00, z+h*.82), (r*.86, z+h), (0, z+h)], P["meat"], wobble=.055, phase=idx)
+            patty = lathe("Carne", [(0, z), (r*.78, z), (r*1.01, z+.001), (r*1.045, z+h*.16),
+                (r*1.02,z+h*.44), (r*1.00, z+h*.82), (r*.86, z+h), (0, z+h)],
+                P["meat"], segments=144, wobble=.055, phase=idx)
+            for vertex in patty.data.vertices:
+                if math.hypot(vertex.co.x, vertex.co.y) > r*.9:
+                    rough = rng.uniform(.977, 1.026)
+                    vertex.co.x *= rough
+                    vertex.co.y *= rough
+                    vertex.co.z += rng.uniform(-.0014, .0014)
             for k in range(18):
                 a = TAU*k/18 + idx*.27
                 ellipsoid("Crosta", (r*1.015*math.cos(a), r*1.015*math.sin(a), z+h*.45),
@@ -272,12 +283,21 @@ def burger(slug, layers):
             z += .004
         elif layer == "bacon":
             for k in range(3):
-                pts=[]
-                for j in range(8):
-                    x=-r*.88+j*r*.25
-                    pts.append((x, (k-1)*.018, z+.002+math.sin(j*1.7+k)*.002))
-                tube("Bacon", pts, .0052, P["bacon"])
-                tube("Gordura bacon", [(x,y-.001,zv+.001) for x,y,zv in pts], .0014, P["fat"])
+                verts, faces = [], []
+                for j in range(25):
+                    t=j/24
+                    x=(t-.5)*r*2.12
+                    for edge in (-1,1):
+                        y=(k-1)*.019+edge*(.008+.0016*math.sin(23*t+k))
+                        y+=.004*math.sin(9*t+k)
+                        wave=.003*math.sin(20*t+k+edge*.6)
+                        verts.append((x,y,z+.004+wave-max(0,abs(x)-r*.88)*.6))
+                    if j:
+                        i=j*2
+                        faces.append((i-2,i,i+1,i-1))
+                strip=mesh("Fatia de bacon",verts,faces,P["bacon"])
+                strip.rotation_euler.z=-.68+k*.14
+                strip.modifiers.new("espessura do bacon","SOLIDIFY").thickness=.0017
             z += .009
         elif layer == "lettuce":
             for k in range(7):
@@ -300,7 +320,7 @@ def burger(slug, layers):
         t=k/12*math.pi/2
         profile.append((r*math.cos(t),z+.014+top_h*math.sin(t)))
     lathe("Pao superior", profile, P["bread"], wobble=.016)
-    sesame_on_bun(r, z+.014, top_h, 30)
+    sesame_on_bun(r, z+.014, top_h, 55)
 
 
 def pizza(slug, topping):
@@ -525,6 +545,23 @@ def add_color_variation():
         if ob.parent != root or ob.type != "MESH" or not ob.data.materials:
             continue
         mat = ob.data.materials[0]
+        # UVs por face, em metros. O mesmo poro mantém a escala no topo e na lateral.
+        uv = ob.data.uv_layers.active or ob.data.uv_layers.new(name="Ingredient")
+        bun = mat == P["bread"] and ob.name.startswith("Pao")
+        if bun:
+            low = min(v.co.z for v in ob.data.vertices)
+            span = max(v.co.z for v in ob.data.vertices) - low
+        for face in ob.data.polygons:
+            normal = face.normal
+            axis = max(range(3), key=lambda i: abs(normal[i]))
+            for loop in face.loop_indices:
+                pos = ob.matrix_world @ ob.data.vertices[ob.data.loops[loop].vertex_index].co
+                a, b = ((pos.y, pos.z), (pos.x, pos.z), (pos.x, pos.y))[axis]
+                if bun:
+                    # Continuous mapping around the dome, including its steep lip.
+                    flare = 1.4 - .55*(pos.z-low)/span
+                    a, b = pos.x*flare, pos.y*flare
+                uv.data[loop].uv = (a/.055, b/.055)
         base = mat.diffuse_color[:3]
         attr = ob.data.color_attributes.get("COLOR_0") or ob.data.color_attributes.new(name="COLOR_0",type="FLOAT_COLOR",domain="POINT")
         local = random.Random(ob.name + str(len(ob.data.vertices)))

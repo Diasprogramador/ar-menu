@@ -41,7 +41,7 @@ with sync_playwright() as p:
             page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
             page.screenshot(path=str(OUT / f'{slug}.png'))
             page.get_by_role('button', name='Ajustar escala', exact=True).click()
-            expect(page.get_by_label('Distância do celular até a mesa')).to_be_visible()
+            expect(page.get_by_label('Altura do celular sobre a mesa')).to_be_visible()
             page.get_by_role('button', name='Posicionar em outro lugar', exact=True).click()
             expect(hint).to_be_visible()
             page.get_by_role('button', name='Fechar realidade aumentada').click()

@@ -4,6 +4,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 import { applyPinch, clamp, scalePercentage, type PhysicalDimensions, type ScaleCalibration } from './scale';
 import { calculateManualOrbit } from './manualOrbit';
+import { cameraVerticalFov, heightFromReference, tableDistance } from './tableDistance';
 import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } from '@/features/models3d/modelLoader';
 
 /**
@@ -30,10 +31,8 @@ import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } fro
  * Por isso ele fica abaixo do WebXR e do Quick Look na ordem de preferência:
  * onde existe rastreamento de verdade, usamos rastreamento de verdade.
  *
- * A escala é real, e não estimada: sabendo o campo de visão da câmera e a
- * distância até o plano, o tamanho em pixels de um objeto de dimensão física
- * conhecida é determinado. A única incógnita é a altura do aparelho sobre a
- * mesa, que o cliente ajusta uma vez num controle deslizante.
+ * O modo monocular estima a distância com uma referência de 10 cm sobre a mesa
+ * ou com a altura informada pelo cliente. O campo de visão é aproximado.
  */
 
 export type CameraSessionStatus =
@@ -61,15 +60,6 @@ type UseCameraSessionOptions = {
 const ALTURA_PADRAO_CM = 38;
 const ALTURA_MINIMA_CM = 15;
 const ALTURA_MAXIMA_CM = 120;
-
-/**
- * Campo de visão horizontal aproximado da câmera traseira.
- *
- * O navegador não expõe a distância focal, e os valores reais ficam entre 60°
- * e 70° na grande maioria dos aparelhos. O erro que sobra é absorvido pelo
- * ajuste de altura, que o cliente faz olhando para a própria mesa.
- */
-const FOV_HORIZONTAL_GRAUS = 66;
 
 const eixoZ = new THREE.Vector3(0, 0, 1);
 const euler = new THREE.Euler();
@@ -103,6 +93,10 @@ export function useCameraSession({
   const [calibration, setCalibration] = useState<ScaleCalibration | null>(null);
   const [scalePercent, setScalePercent] = useState(100);
   const [alturaCm, setAlturaCm] = useState(ALTURA_PADRAO_CM);
+  const [distance, setDistance] = useState<ReturnType<typeof tableDistance>>(null);
+  const [heightKnown, setHeightKnown] = useState(false);
+  const [referenceHint, setReferenceHint] = useState<string | null>(null);
+  const reference = useRef<{ first: THREE.Vector3 | null } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -162,6 +156,9 @@ export function useCameraSession({
     const atual = runtime.current;
     if (!atual) return;
     atual.colocado = false;
+    reference.current = null;
+    setReferenceHint(null);
+    setDistance(null);
     atual.modelo.visible = false;
     atual.marcador.visible = true;
     setStatus('scanning');
@@ -179,16 +176,29 @@ export function useCameraSession({
   const ajustarAltura = useCallback((valorCm: number) => {
     const limitado = clamp(valorCm, ALTURA_MINIMA_CM, ALTURA_MAXIMA_CM);
     setAlturaCm(limitado);
+    setHeightKnown(true);
 
     const atual = runtime.current;
     if (!atual) return;
-    atual.alturaMetros = limitado / 100;
-    atual.modelo.position.y = -atual.alturaMetros;
+    const newHeight = limitado / 100;
+    // Conserva o pixel escolhido ao recalibrar a profundidade sobre o raio.
+    atual.modelo.position.multiplyScalar(newHeight / atual.alturaMetros);
+    atual.alturaMetros = newHeight;
+    if (atual.colocado) setDistance(tableDistance(atual.camera.position, atual.modelo.position));
     atual.marcador.position.y = -atual.alturaMetros;
   }, []);
 
+  const calibrateReference = useCallback(() => {
+    reposicionar();
+    reference.current = { first: null };
+    setReferenceHint('Mantenha o celular paralelo à mesa. Toque no zero de uma régua apoiada nela.');
+  }, [reposicionar]);
+
   const start = useCallback(async () => {
     setError(null);
+    reference.current = null;
+    setReferenceHint(null);
+    setDistance(null);
     emit.current?.('opened');
 
     if (!window.isSecureContext) {
@@ -288,10 +298,10 @@ export function useCameraSession({
     // O campo de visão vertical vem do horizontal e da proporção da tela: é o
     // que faz um prato de 12 cm ocupar na tela os pixels que ocuparia de fato.
     const proporcao = window.innerWidth / window.innerHeight;
-    const fovHorizontal = THREE.MathUtils.degToRad(FOV_HORIZONTAL_GRAUS);
-    const fovVertical = 2 * Math.atan(Math.tan(fovHorizontal / 2) / proporcao);
+    const fovVertical = () => cameraVerticalFov(video.videoWidth || window.innerWidth,
+      video.videoHeight || window.innerHeight, window.innerWidth, window.innerHeight);
     const camera = new THREE.PerspectiveCamera(
-      THREE.MathUtils.radToDeg(fovVertical),
+      fovVertical(),
       proporcao,
       0.01,
       30,
@@ -414,13 +424,13 @@ export function useCameraSession({
       if (!atual) return;
       const novaProporcao = window.innerWidth / window.innerHeight;
       atual.camera.aspect = novaProporcao;
-      atual.camera.fov = THREE.MathUtils.radToDeg(
-        2 * Math.atan(Math.tan(fovHorizontal / 2) / novaProporcao),
-      );
+      atual.camera.fov = fovVertical();
       atual.camera.updateProjectionMatrix();
       atual.renderer.setSize(window.innerWidth, window.innerHeight);
     };
     window.addEventListener('resize', aoRedimensionar);
+    video.addEventListener('resize', aoRedimensionar);
+    limpezas.push(() => video.removeEventListener('resize', aoRedimensionar));
     limpezas.push(() => window.removeEventListener('resize', aoRedimensionar));
 
     // ---- toque ----
@@ -433,6 +443,7 @@ export function useCameraSession({
     const projetarNoPlano = (clientX: number, clientY: number): THREE.Vector3 | null => {
       const atual = runtime.current;
       if (!atual) return null;
+      atual.camera.updateMatrixWorld();
       ponteiro.x = (clientX / window.innerWidth) * 2 - 1;
       ponteiro.y = -(clientY / window.innerHeight) * 2 + 1;
       raio.setFromCamera(ponteiro, atual.camera);
@@ -533,11 +544,34 @@ export function useCameraSession({
       if (!atual || arrastou || !eraUnico) return;
 
       // Toque sem arrasto: posiciona ou reposiciona o prato
+      if (reference.current) {
+        // Ambos os toques usam o mesmo ângulo conhecido, inclusive sem giroscópio.
+        atual.camera.rotation.set(-Math.PI / 2, 0, 0);
+      }
       const ponto = projetarNoPlano(evento.clientX, evento.clientY);
       if (!ponto) return;
+      if (reference.current) {
+        if (!reference.current.first) {
+          reference.current.first = ponto;
+          setReferenceHint('Sem mover o celular, toque na marca de 10 cm.');
+        } else {
+          const height = heightFromReference(reference.current.first, ponto, atual.alturaMetros * 100);
+          if (height === null) {
+            reference.current.first = null;
+            setReferenceHint('Confira as marcas e toque novamente no zero da régua.');
+          } else {
+            ajustarAltura(height);
+            reference.current = null;
+            setReferenceHint('Altura estimada. Mantenha o celular nessa altura e toque onde deseja o prato.');
+          }
+        }
+        return;
+      }
 
       atual.modelo.position.set(ponto.x, -atual.alturaMetros, ponto.z);
       atual.modelo.visible = true;
+      setReferenceHint(null);
+      setDistance(tableDistance(atual.camera.position, ponto));
       atual.marcador.visible = false;
       if (!atual.colocado) {
         atual.colocado = true;
@@ -549,7 +583,12 @@ export function useCameraSession({
     superficie.addEventListener('pointerdown', aoPressionar);
     superficie.addEventListener('pointermove', aoMover);
     superficie.addEventListener('pointerup', aoSoltar);
-    superficie.addEventListener('pointercancel', aoSoltar);
+    const aoCancelar = (evento: PointerEvent) => {
+      ponteiros.delete(evento.pointerId);
+      arrastou = true;
+      distanciaInicial = 0;
+    };
+    superficie.addEventListener('pointercancel', aoCancelar);
     const aoRolar = (evento: WheelEvent) => {
       const atual = runtime.current;
       if (!atual?.colocado) return;
@@ -565,7 +604,7 @@ export function useCameraSession({
       superficie.removeEventListener('pointerdown', aoPressionar);
       superficie.removeEventListener('pointermove', aoMover);
       superficie.removeEventListener('pointerup', aoSoltar);
-      superficie.removeEventListener('pointercancel', aoSoltar);
+      superficie.removeEventListener('pointercancel', aoCancelar);
       superficie.removeEventListener('wheel', aoRolar);
     });
 
@@ -599,7 +638,7 @@ export function useCameraSession({
 
     setStatus('scanning');
     emit.current?.('ready');
-  }, [modelUrl, dimensions, placement, alturaCm]);
+  }, [modelUrl, dimensions, placement, alturaCm, ajustarAltura]);
 
   return {
     status,
@@ -608,6 +647,10 @@ export function useCameraSession({
     calibration,
     scalePercent,
     alturaCm,
+    heightKnown,
+    distance,
+    referenceHint,
+    calibrateReference,
     videoRef,
     canvasHostRef,
     start,

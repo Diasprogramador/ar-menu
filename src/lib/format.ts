@@ -95,6 +95,14 @@ export function formatDimensions(dimensions: {
 
 const COMBINING_MARKS = /[̀-ͯ]/g;
 
+/** React Router already decoded the segment. Preserve its full length for printed links. */
+export function sharedMenuSlug(value: string): string {
+  return value.normalize('NFKD').replace(COMBINING_MARKS, '').toLowerCase()
+    .replace(/[\u200b\u2060\ufeff]/g, '')
+    .trim().replace(/[.,;:!?)\]]+$/, '').trim()
+    .replace(/[\s\u2010-\u2015\u2212]+/g, '-');
+}
+
 export function slugify(value: string): string {
   return value
     .normalize('NFD')

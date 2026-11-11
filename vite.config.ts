@@ -36,7 +36,8 @@ export default defineConfig({
         // Modelos 3D nao entram no precache: sao grandes e so importam sob demanda
         globIgnores: ['**/demo-models/**'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/admin/],
+        // Quick Look may request a USDZ as a navigation. Only app pages get HTML.
+        navigateFallbackAllowlist: [/^\/(?:\?|$)/, /^\/(?:r|cardapio)(?:\/|\?|$)/],
         runtimeCaching: [
           {
             // Cardapio: rede primeiro, para o preco nunca ficar velho na tela.

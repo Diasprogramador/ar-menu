@@ -68,7 +68,7 @@ export default function ProductPage() {
       product?.description ??
       `Veja ${product?.name ?? 'este prato'} em realidade aumentada antes de pedir.`,
     image: product?.image_url ?? restaurant.cover_url,
-    canonicalPath: `/r/${restaurant.slug}/produto/${productSlug}`,
+    canonicalPath: `/r/${restaurant.slug}/produto/${product?.slug ?? productSlug}`,
     structuredData: product
       ? {
           '@context': 'https://schema.org',

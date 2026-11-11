@@ -156,12 +156,13 @@ pedir.
 
 **O link precisa ter um único filho, e esse filho é um `<img>`.** Com texto ao
 lado da imagem, o WebKit trata o `<a rel="ar">` como download comum e a câmera
-nunca abre — sem erro no console. Por isso o link é montado em código, com a
-foto do prato como único filho, e clicado dentro do gesto do usuário.
+nunca abre — sem erro no console. O cliente toca diretamente no link visível,
+com a foto como único filho. A legenda fica ao lado do link.
 
 **O arquivo precisa chegar como `model/vnd.usdz+zip`.** Servido como
 `application/octet-stream`, o iOS baixa em vez de abrir. O cabeçalho está fixado
-em `vercel.json`.
+em `vercel.json`. O service worker só usa o HTML para as rotas públicas do
+aplicativo. Uma navegação até um USDZ segue para o arquivo mesmo após instalar a PWA.
 
 Além disso, o USDZ é gerado com `#allowsContentScaling=0` na URL: sem isso o
 visualizador da Apple deixa o cliente redimensionar o objeto, o que anularia a

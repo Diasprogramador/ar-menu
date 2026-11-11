@@ -6,6 +6,7 @@ import {
   demoTableByCode,
 } from './demoData';
 import { env } from '@/lib/env';
+import { sharedMenuSlug } from '@/lib/format';
 import { supabase, toDataError } from '@/lib/supabase';
 import type {
   Category,
@@ -44,7 +45,8 @@ const MODEL_FIELDS = `
   offset_x_cm, offset_y_cm, offset_z_cm, created_at, updated_at
 `;
 
-export async function getRestaurantBySlug(slug: string): Promise<Restaurant | null> {
+export async function getRestaurantBySlug(segment: string): Promise<Restaurant | null> {
+  const slug = sharedMenuSlug(segment);
   if (!env.isConfigured) {
     return slug === demoRestaurant.slug ? demoRestaurant : null;
   }
@@ -98,9 +100,10 @@ export async function getMenu(slug: string): Promise<MenuData | null> {
 
 export async function getProductDetail(
   restaurantId: string,
-  productSlug: string,
+  segment: string,
 ): Promise<ProductDetail | null> {
-  if (!env.isConfigured) return demoProductDetail(productSlug);
+  const productSlug = sharedMenuSlug(segment);
+  if (!env.isConfigured) return restaurantId === demoRestaurant.id ? demoProductDetail(productSlug) : null;
 
   const { data, error } = await supabase
     .from('products')

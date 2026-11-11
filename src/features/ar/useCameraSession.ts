@@ -287,7 +287,7 @@ export function useCameraSession({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 0.78;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
@@ -320,9 +320,10 @@ export function useCameraSession({
     const pmrem = new THREE.PMREMGenerator(renderer);
     const ambiente = pmrem.fromScene(new RoomEnvironment(), 0.04);
     scene.environment = ambiente.texture;
+    scene.environmentIntensity = 0.38;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.9));
-    const sol = new THREE.DirectionalLight(0xfff1e0, 2.0);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.4));
+    const sol = new THREE.DirectionalLight(0xfff1e0, 1.55);
     sol.position.set(0.7, 1.6, 0.9);
     sol.castShadow = true;
     sol.shadow.mapSize.set(1024, 1024);

@@ -232,6 +232,7 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.78;
     renderer.xr.enabled = true;
     renderer.domElement.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;';
     document.body.appendChild(renderer.domElement);
@@ -248,8 +249,9 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
     const pmrem = new THREE.PMREMGenerator(renderer);
     const ambiente = pmrem.fromScene(new RoomEnvironment(), 0.04);
     scene.environment = ambiente.texture;
+    scene.environmentIntensity = 0.38;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbbb, 1.0));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.4));
     const sun = new THREE.DirectionalLight(0xffffff, 1.4);
     sun.position.set(0.5, 2, 1);
     scene.add(sun);

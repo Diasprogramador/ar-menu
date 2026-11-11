@@ -73,7 +73,7 @@ export function ModelViewer3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.78;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
@@ -86,6 +86,7 @@ export function ModelViewer3D({
     const pmrem = new THREE.PMREMGenerator(renderer);
     const environment = pmrem.fromScene(new RoomEnvironment(), 0.04);
     scene.environment = environment.texture;
+    scene.environmentIntensity = 0.38;
 
     const camera = new THREE.PerspectiveCamera(
       38,
@@ -100,10 +101,7 @@ export function ModelViewer3D({
     // gordura da carne. Com luz difusa e frontal, o especular some e tudo volta
     // a parecer fosco.
     //
-    // A intensidade caiu de 3,4 para 2,3 junto com a exposição: os modelos
-    // deixaram de ser marrons dessaturados e passaram a ter cor cheia, e com a
-    // luz antiga o pão chegava na tela quase branco.
-    const key = new THREE.DirectionalLight(0xfff1e0, 2.3);
+    const key = new THREE.DirectionalLight(0xfff1e0, 1.55);
     key.position.set(0.6, 1.4, 0.9);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -115,7 +113,7 @@ export function ModelViewer3D({
 
     // Contraluz fria: separa a silhueta do fundo e marca a borda molhada de
     // molho e queijo, que é onde o brilho especular conta a textura.
-    const rim = new THREE.DirectionalLight(0xdce8ff, 1.1);
+    const rim = new THREE.DirectionalLight(0xdce8ff, 0.65);
     rim.position.set(-0.9, 0.7, -1.1);
     scene.add(rim);
 

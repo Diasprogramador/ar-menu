@@ -17,7 +17,19 @@ if (!blender) {
   throw new Error('Blender not found. Set BLENDER_PATH to the Blender executable.');
 }
 
+const selected = process.argv.slice(2);
+if (selected.some(slug => !/^[a-z0-9-]+$/.test(slug))) throw new Error('Invalid product slug');
+const allSlugs = [
+  'bolinho-de-costela', 'aneis-de-cebola', 'batata-crocante', 'smash-bacon',
+  'burger-da-casa', 'smash-duplo-cheddar', 'pizza-margherita', 'pizza-pepperoni',
+  'pizza-quatro-queijos', 'costela-defumada', 'salada-caesar', 'picanha-na-brasa',
+  'brownie', 'petit-gateau', 'pudim-de-leite', 'milkshake', 'refrigerante',
+  'suco-natural', 'agua-com-gas',
+];
+
+if (selected.some(slug => !allSlugs.includes(slug))) throw new Error('Unknown product slug');
 const expression = [
+  `ONLY=${JSON.stringify(selected)}`,
   `PROJECT_ROOT=${JSON.stringify(root)}`,
   `RENDER=${render ? 'True' : 'False'}`,
   `exec(compile(open(PROJECT_ROOT+r'/scripts/blender-realistic-catalog.py', encoding='utf-8').read(), 'blender-realistic-catalog.py', 'exec'))`,
@@ -29,16 +41,9 @@ const generated = spawnSync(blender, ['--background', '--python-exit-code', '1',
 });
 if (generated.status !== 0) process.exit(generated.status ?? 1);
 
-const allSlugs = [
-  'bolinho-de-costela', 'aneis-de-cebola', 'batata-crocante', 'smash-bacon',
-  'burger-da-casa', 'smash-duplo-cheddar', 'pizza-margherita', 'pizza-pepperoni',
-  'pizza-quatro-queijos', 'costela-defumada', 'salada-caesar', 'picanha-na-brasa',
-  'brownie', 'petit-gateau', 'pudim-de-leite', 'milkshake', 'refrigerante',
-  'suco-natural', 'agua-com-gas',
-];
-
-for (const slug of allSlugs) {
-  const finalized = spawnSync(process.execPath, ['scripts/finalize-blender-model.mjs', slug], {
+for (const slug of selected.length ? selected : allSlugs) {
+  const raw = resolve(root, 'artifacts/blender-realistic', slug + '.glb');
+  const finalized = spawnSync(process.execPath, ['scripts/finalize-blender-model.mjs', slug, raw], {
     cwd: root,
     stdio: 'inherit',
   });

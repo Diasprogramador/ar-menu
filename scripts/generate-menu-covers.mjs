@@ -12,12 +12,15 @@ const blender = candidates.find((candidate) => candidate === 'blender' || exists
 
 if (!blender) throw new Error('Blender not found. Set BLENDER_PATH to the Blender executable.');
 
+const selected = process.argv.slice(2);
+if (selected.some(slug => !/^[a-z0-9-]+$/.test(slug))) throw new Error('Invalid product slug');
 const expression = [
+  `ONLY=${JSON.stringify(selected)}`,
   `PROJECT_ROOT=${JSON.stringify(process.cwd())}`,
   `exec(compile(open(PROJECT_ROOT+r'/scripts/render-menu-covers.py', encoding='utf-8').read(), 'render-menu-covers.py', 'exec'))`,
 ].join(';');
 
-const result = spawnSync(blender, ['--background', '--python-expr', expression], {
+const result = spawnSync(blender, ['--background', '--python-exit-code', '1', '--python-expr', expression], {
   stdio: 'inherit',
   windowsHide: true,
 });

@@ -71,13 +71,38 @@ def add_area(name, location, target, energy, size, color):
     look_at(light, target)
 
 
-def imported_bounds(objects):
-    points = [obj.matrix_world @ Vector(corner) for obj in objects if obj.type == "MESH" for corner in obj.bound_box]
+def mesh_points(objects):
+    points = []
+    for obj in objects:
+        if obj.type == "MESH":
+            transform = obj.matrix_world
+            points.extend(transform @ vertex.co for vertex in obj.data.vertices)
     if not points:
         raise RuntimeError("GLB contains no mesh")
-    low = Vector(tuple(min(point[axis] for point in points) for axis in range(3)))
-    high = Vector(tuple(max(point[axis] for point in points) for axis in range(3)))
-    return low, high
+    return points
+
+
+def fit_camera(camera, scene, slug, points, target):
+    elevation = 32
+    if slug.startswith("pizza") or slug in {"salada-caesar", "picanha-na-brasa", "costela-defumada"}:
+        elevation = 43
+    elif slug.startswith(("smash", "burger")):
+        elevation = 16
+    elif slug in {"milkshake-de-morango", "suco-natural", "refrigerante", "agua-com-gas"}:
+        elevation = 13
+    azimuth = math.radians(-62)
+    tilt = math.radians(elevation)
+    direction = Vector((math.cos(azimuth)*math.cos(tilt), math.sin(azimuth)*math.cos(tilt), math.sin(tilt)))
+    rotation = (-direction).to_track_quat("-Z", "Y")
+    right, up = (rotation @ axis for axis in (Vector((1,0,0)), Vector((0,1,0))))
+    frame = camera.data.view_frame(scene=scene)
+    half_width = max(abs(c.x/c.z) for c in frame) * .85
+    half_height = max(abs(c.y/c.z) for c in frame) * .82
+    distance = max(v.dot(direction) + max(abs(v.dot(right))/half_width, abs(v.dot(up))/half_height)
+                   for v in (point-target for point in points))
+    camera.location = target + direction*distance
+    camera.rotation_euler = rotation.to_euler()
+    camera.data.clip_start = .005
 
 
 def render_cover(slug, model_name):
@@ -91,17 +116,16 @@ def render_cover(slug, model_name):
     bpy.ops.import_scene.gltf(filepath=str(source))
     imported = list(scene.objects)
 
-    low, high = imported_bounds(imported)
+    points = mesh_points(imported)
+    low, high = (Vector(tuple(fn(p[i] for p in points) for i in range(3))) for fn in (min, max))
     offset = Vector((-(low.x + high.x) / 2, -(low.y + high.y) / 2, -low.z))
     roots = [obj for obj in imported if obj.parent is None]
     for obj in roots:
         obj.location += offset
     bpy.context.view_layer.update()
 
-    low, high = imported_bounds(imported)
-    center = (low + high) / 2
+    points = [p + offset for p in points]
     size = high - low
-    radius = max((point - center).length for obj in imported if obj.type == "MESH" for point in [obj.matrix_world @ Vector(corner) for corner in obj.bound_box])
     span = max(size.x, size.y, size.z)
 
     world = bpy.data.worlds.new("Charcoal studio")
@@ -111,12 +135,12 @@ def render_cover(slug, model_name):
     background.inputs["Strength"].default_value = 0.32
     scene.world = world
 
-    bpy.ops.mesh.primitive_plane_add(size=max(span * 12, 2), location=(0, 0, -span * 0.015))
+    bpy.ops.mesh.primitive_plane_add(size=max(span * 12, 2), location=(0, 0, -.0001))
     floor = bpy.context.object
     floor.name = "Warm slate"
     floor.data.materials.append(material("Warm slate", hex_color("#2A1D18"), 0.82))
 
-    target = Vector((0, 0, max(size.z * 0.42, center.z * 0.86)))
+    target = Vector((0, 0, size.z * .47))
     # Power follows the physical footprint. The GLBs are in meters, so fixed
     # studio wattages would overexpose a 15 cm burger by several stops.
     add_area("Softbox", Vector((-span * 1.5, -span * 1.7, span * 2.4)), target, 88 * span * span, span * 1.6, (1.0, 0.91, 0.79))
@@ -128,14 +152,13 @@ def render_cover(slug, model_name):
     camera = bpy.data.objects.new("Menu cover camera", camera_data)
     scene.collection.objects.link(camera)
     scene.camera = camera
-    direction = Vector((1.15, -1.55, 0.92)).normalized()
-    distance = radius / max(math.sin(camera_data.angle_y / 2), 0.1) * .96
-    camera.location = target + direction * distance
-    look_at(camera, target)
-
     scene.render.resolution_x = 900
     scene.render.resolution_y = 720
     scene.render.resolution_percentage = 100
+    fit_camera(camera, scene, slug, points, target)
+    scene.render.engine = "BLENDER_EEVEE"
+    if hasattr(scene.eevee, "taa_render_samples"):
+        scene.eevee.taa_render_samples = 32
     scene.render.film_transparent = False
     scene.render.image_settings.color_mode = "RGB"
     formats = {item.identifier for item in bpy.types.ImageFormatSettings.bl_rna.properties["file_format"].enum_items}
@@ -148,9 +171,11 @@ def render_cover(slug, model_name):
     print("COVER_DONE", slug)
 
 
-for product_slug, glb_name in PRODUCTS.items():
-    if globals().get("ONLY") and glb_name not in ONLY:
-        continue
+selection = set(globals().get("ONLY", []))
+if selection.difference(PRODUCTS.values()):
+    raise ValueError(f"Unknown model: {selection.difference(PRODUCTS.values())}")
+jobs = [(slug, glb) for slug, glb in PRODUCTS.items() if not selection or glb in selection]
+for product_slug, glb_name in jobs:
     render_cover(product_slug, glb_name)
 
-print("Rendered", len(PRODUCTS), "menu covers to", OUT)
+print("Rendered", len(jobs), "menu covers to", OUT)

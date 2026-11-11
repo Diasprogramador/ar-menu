@@ -19,9 +19,8 @@ import type {
  * Com o `.env` preenchido, nada disto é usado: o app fala com o banco de
  * verdade, com RLS e pedidos calculados no servidor.
  *
- * As dimensões físicas abaixo foram medidas na caixa envolvente de cada GLB
- * gerado por `scripts/generate-demo-models.mjs` ou pelo pipeline Blender
- * documentado em `docs/3d-smash-duplo.md`.
+ * O exportador ajusta GLB e USDZ às medidas da porção cadastrada.
+ * O comando check:models confere a caixa envolvente e a base de cada GLB.
  */
 
 export const DEMO_SLUG = 'brasa-e-mesa';
@@ -105,7 +104,7 @@ type Seed = {
   };
 };
 
-const cover = (slug: string) => `/demo/covers/${slug}.jpg`;
+const cover = (slug: string) => `/demo/covers/${slug}.jpg?v=cozinha-2`;
 
 const SEEDS: Seed[] = [
   {
@@ -121,7 +120,7 @@ const SEEDS: Seed[] = [
     badges: ['Mais pedido'],
     prep: 20,
     calories: 620,
-    model: { file: 'bolinho-de-costela', width: 24, height: 5.7, depth: 24, bytes: 553120 },
+    model: { file: 'bolinho-de-costela', width: 24, height: 5.7, depth: 24, bytes: 543328 },
   },
   {
     slug: 'aneis-de-cebola',
@@ -135,7 +134,7 @@ const SEEDS: Seed[] = [
     image: cover('aneis-de-cebola'),
     prep: 15,
     calories: 480,
-    model: { file: 'aneis-de-cebola', width: 23, height: 8.5, depth: 23, bytes: 426416 },
+    model: { file: 'aneis-de-cebola', width: 23, height: 8.5, depth: 23, bytes: 628992 },
   },
   {
     slug: 'batata-crocante',
@@ -150,7 +149,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 12,
     calories: 540,
-    model: { file: 'batata-crocante', width: 24, height: 5.6, depth: 24, bytes: 233948 },
+    model: { file: 'batata-crocante', width: 24, height: 5.6, depth: 24, bytes: 481756 },
   },
   {
     slug: 'smash-bacon',
@@ -166,7 +165,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 18,
     calories: 890,
-    model: { file: 'smash-bacon', width: 14.6, height: 11.8, depth: 14.6, bytes: 924772 },
+    model: { file: 'smash-bacon', width: 14.6, height: 11.8, depth: 14.6, bytes: 915572 },
   },
   {
     slug: 'burger-da-casa',
@@ -183,7 +182,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 18,
     calories: 820,
-    model: { file: 'burger-da-casa', width: 14.6, height: 12.3, depth: 14.6, bytes: 843560 },
+    model: { file: 'burger-da-casa', width: 14.6, height: 12.3, depth: 14.6, bytes: 894496 },
   },
   {
     slug: 'smash-duplo-cheddar',
@@ -197,7 +196,7 @@ const SEEDS: Seed[] = [
     image: cover('smash-duplo-cheddar'),
     prep: 22,
     calories: 1180,
-    model: { file: 'smash-duplo-cheddar', width: 16, height: 13.8, depth: 16, bytes: 1161696 },
+    model: { file: 'smash-duplo-cheddar', width: 16, height: 13.8, depth: 16, bytes: 786820 },
   },
   {
     slug: 'pizza-margherita',
@@ -213,7 +212,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 25,
     calories: 1250,
-    model: { file: 'pizza-margherita', height: 3.5, diameter: 30, bytes: 447568 },
+    model: { file: 'pizza-margherita', height: 3.5, diameter: 30, bytes: 546264 },
   },
   {
     slug: 'pizza-pepperoni',
@@ -228,7 +227,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 25,
     calories: 1420,
-    model: { file: 'pizza-pepperoni', height: 3, diameter: 30, bytes: 784800 },
+    model: { file: 'pizza-pepperoni', height: 3, diameter: 30, bytes: 679108 },
   },
   {
     slug: 'pizza-quatro-queijos',
@@ -241,7 +240,7 @@ const SEEDS: Seed[] = [
     image: cover('pizza-quatro-queijos'),
     prep: 25,
     calories: 1480,
-    model: { file: 'pizza-quatro-queijos', height: 3.1, diameter: 30, bytes: 855492 },
+    model: { file: 'pizza-quatro-queijos', height: 3.1, diameter: 30, bytes: 764284 },
   },
   {
     slug: 'costela-defumada',
@@ -257,7 +256,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 15,
     calories: 1640,
-    model: { file: 'costela-defumada', width: 25.5, height: 4.9, depth: 18, bytes: 118644 },
+    model: { file: 'costela-defumada', width: 25.5, height: 4.9, depth: 18, bytes: 715180 },
   },
   {
     slug: 'salada-caesar',
@@ -271,7 +270,7 @@ const SEEDS: Seed[] = [
     image: cover('salada-caesar'),
     prep: 12,
     calories: 420,
-    model: { file: 'salada-caesar', height: 7.6, diameter: 21.2, bytes: 376288 },
+    model: { file: 'salada-caesar', height: 7.6, diameter: 21.2, bytes: 872508 },
   },
   {
     slug: 'picanha-na-brasa',
@@ -286,7 +285,7 @@ const SEEDS: Seed[] = [
     badges: ['Novo'],
     prep: 30,
     calories: 1520,
-    model: { file: 'picanha-na-brasa', width: 28, height: 5.2, depth: 28, bytes: 611660 },
+    model: { file: 'picanha-na-brasa', width: 28, height: 5.2, depth: 28, bytes: 1012880 },
   },
   {
     slug: 'brownie-com-sorvete',
@@ -302,7 +301,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 10,
     calories: 680,
-    model: { file: 'brownie', width: 17, height: 6.4, depth: 17, bytes: 207856 },
+    model: { file: 'brownie', width: 17, height: 6.4, depth: 17, bytes: 655120 },
   },
   {
     slug: 'petit-gateau',
@@ -316,7 +315,7 @@ const SEEDS: Seed[] = [
     image: cover('petit-gateau'),
     prep: 12,
     calories: 620,
-    model: { file: 'petit-gateau', width: 15.6, height: 5.7, depth: 15, bytes: 268092 },
+    model: { file: 'petit-gateau', width: 15.6, height: 5.7, depth: 15, bytes: 627968 },
   },
   {
     slug: 'pudim-de-leite',
@@ -329,7 +328,7 @@ const SEEDS: Seed[] = [
     image: cover('pudim-de-leite'),
     prep: 5,
     calories: 380,
-    model: { file: 'pudim-de-leite', height: 5.7, diameter: 18, bytes: 167748 },
+    model: { file: 'pudim-de-leite', height: 5.7, diameter: 18, bytes: 158880 },
   },
   {
     slug: 'milkshake-de-morango',
@@ -343,7 +342,7 @@ const SEEDS: Seed[] = [
     featured: true,
     prep: 8,
     calories: 520,
-    model: { file: 'milkshake', width: 8.2, height: 21, depth: 8, bytes: 174528 },
+    model: { file: 'milkshake', width: 8.2, height: 21, depth: 8, bytes: 765368 },
   },
   {
     slug: 'refrigerante',
@@ -356,7 +355,7 @@ const SEEDS: Seed[] = [
     image: cover('refrigerante'),
     prep: 2,
     calories: 140,
-    model: { file: 'refrigerante', width: 9, height: 14.8, depth: 8, bytes: 145572 },
+    model: { file: 'refrigerante', width: 9, height: 14.8, depth: 8, bytes: 697724 },
   },
   {
     slug: 'suco-natural',
@@ -369,7 +368,7 @@ const SEEDS: Seed[] = [
     image: cover('suco-natural'),
     prep: 5,
     calories: 120,
-    model: { file: 'suco-natural', width: 9.1, height: 15.8, depth: 8, bytes: 139092 },
+    model: { file: 'suco-natural', width: 9.1, height: 15.8, depth: 8, bytes: 556784 },
   },
   {
     slug: 'agua-com-gas',
@@ -382,7 +381,7 @@ const SEEDS: Seed[] = [
     image: cover('agua-com-gas'),
     prep: 1,
     calories: 0,
-    model: { file: 'agua-com-gas', width: 10.8, height: 23.5, depth: 7, bytes: 368992 },
+    model: { file: 'agua-com-gas', width: 10.8, height: 23.5, depth: 7, bytes: 1007976 },
   },
 ];
 

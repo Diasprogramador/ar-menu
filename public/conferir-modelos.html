@@ -89,7 +89,7 @@
         scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
         try {
-          const gltf = await loader.loadAsync(`/demo-models/${nome}.glb`);
+          const gltf = await loader.loadAsync(`/demo-models/${nome}.glb?v=cozinha-2`);
           const objeto = gltf.scene;
           objeto.traverse((no) => {
             if (no.isMesh) { no.castShadow = true; no.receiveShadow = true; }

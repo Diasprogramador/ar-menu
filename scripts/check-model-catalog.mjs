@@ -33,12 +33,14 @@ for (const product of demoProducts) {
     meshes++;
     if (object.material.map?.image?.width && object.material.normalMap?.image?.width) {
       assert(object.geometry.attributes.uv, product.slug + ': missing ingredient UVs');
+      assert(object.material.roughnessMap?.image?.width, product.slug + ': missing roughness map');
       texturedIngredients.add(object.material.name);
     }
     triangles += (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3;
     for (const value of object.geometry.attributes.position.array) assert(Number.isFinite(value));
   });
   assert(triangles > 0 && triangles <= 60000, `${product.slug}: triangle budget`);
+  assert(texturedIngredients.size > 0, product.slug + ': missing ingredient surfaces');
   if (['smash-bacon', 'smash-duplo-cheddar', 'burger-da-casa'].includes(product.slug)) {
     for (const name of ['REAL-brioche-assado', 'REAL-carne-selada', 'REAL-queijo-derretido']) {
       assert(texturedIngredients.has(name), product.slug + ': missing surface ' + name);

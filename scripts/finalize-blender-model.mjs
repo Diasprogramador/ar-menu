@@ -22,7 +22,7 @@ globalThis.FileReader ??= class {
 const slug = process.argv[2];
 if (!slug || !/^[a-z0-9-]+$/.test(slug)) throw new Error('Pass a product slug');
 const file = resolve('public/demo-models', `${slug}.glb`);
-const input = readFileSync(file);
+const input = readFileSync(process.argv[3] ?? file);
 const { scene } = await new GLTFLoader().parseAsync(
   input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength), '',
 );

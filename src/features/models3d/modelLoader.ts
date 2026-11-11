@@ -103,7 +103,7 @@ export function measureModel(object: THREE.Object3D): BoundingBoxSize {
  * apenas ignora o resultado; o download em curso ainda alimenta o cache.
  */
 export function catalogAssetUrl(url: string) {
-  return /^\/demo-models\/[\w-]+\.(glb|usdz)$/.test(url) ? url + '?v=ingredient-surfaces' : url;
+  return /^\/demo-models\/[\w-]+\.(glb|usdz)$/.test(url) ? url + '?v=cozinha-2' : url;
 }
 
 export function loadGltf(

@@ -87,7 +87,8 @@ def _crown(r, z, height, center, phase, count, shoulder_power):
         lift = sin(t)
         x = cx + rad*cos(a) + .0035*lift
         y = cy + .98*rad*sin(a) - .0018*lift
-        crease = .0018*exp(-((sin(a - phase)*4.6)**2 + ((t - .69)/.39)**2))
+        crease = .0028*exp(-((sin(a - phase+.17*sin(3*t))*4.6)**2 + ((t - .69)/.39)**2))
+        crease += .00125*exp(-((t-.29)/.29)**2)*(1+.6*cos(7*a+phase))*cos(14*a+2*t)
         h = z + .006 + height*lift + shoulder*(.0016*cos(a + phase) - crease)
         return (x, y, h)
 
@@ -141,7 +142,7 @@ def _patty(r, z, height, center, phase, smash):
     rings = []
     # The smashed skirt flares below the shoulder. Ridges connect across rings,
     # then break up into short crisp peaks at the perimeter.
-    skirt = 1.055 if smash else 1.018
+    skirt = 1.075 if smash else 1.018
     for j, (width, level) in enumerate(((.66, .03), (.86, .015), (.96, .06),
             (skirt, .19), (1.015, .34), (1.025, .52), (.988, .71),
             (.964, .88), (.90, .98), (.79, 1), (.62, 1.01), (.35, 1))):
@@ -150,6 +151,8 @@ def _patty(r, z, height, center, phase, smash):
             relief = sin(32*a + phase + .52*j) + .60*sin(47*a - phase - .34*j)
             edge = min(1, width**4)
             rad = width*_beef_radius(r, a, phase)
+            if smash:
+                rad += .0034*exp(-((level-.19)/.18)**2)*sin(21*a+phase)*cos(9*a-phase)
             rad += edge*(.0016*relief + rng.uniform(-.0009, .0009))
             ripple = .0014*sin(4*a+phase) + .0008*sin(13*a-phase+j*.5)
             h = z + height*level + edge*(ripple + .00065*relief)

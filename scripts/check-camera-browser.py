@@ -1,5 +1,6 @@
 """Browser regression: real renderer with a simulated camera, not physical AR."""
 import json
+import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
@@ -14,7 +15,8 @@ with sync_playwright() as p:
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.goto('http://localhost:5187/r/brasa-e-mesa/produto/smash-bacon')
+    base = os.environ.get('BASE_URL', 'http://localhost:5187').rstrip('/')
+    page.goto(base + '/r/brasa-e-mesa/produto/smash-bacon')
     page.wait_for_load_state('networkidle')
     (OUT / 'initial.txt').write_text(page.locator('body').inner_text(), encoding='utf-8')
     page.get_by_role('button', name='Ver na minha mesa').last.click()

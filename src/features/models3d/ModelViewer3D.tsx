@@ -65,11 +65,15 @@ export function ModelViewer3D({
     let disposed = false;
     let frameId = 0;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: 'high-performance',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      const error = new Error('O navegador não conseguiu abrir os gráficos 3D. Você pode voltar às fotos do prato.');
+      setState({ status: 'error', message: error.message });
+      callbacks.current.onError?.(error);
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;

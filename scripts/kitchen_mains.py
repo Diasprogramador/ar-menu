@@ -175,9 +175,9 @@ def _picanha_cut(batch, cx, cy, angle, length, width, height, phase, seared):
 def steak():
     plate(.14)
     batch = _Batch()
-    _picanha_cut(batch, -.029, .017, -.29, .135, .047, .037, .7, True)
-    _picanha_cut(batch, -.008, -.022, -.18, .140, .047, .029, 2.1, False)
-    _picanha_cut(batch, .010, -.062, -.04, .119, .041, .021, 4.3, False)
+    _picanha_cut(batch, -.023, .019, -.58, .135, .047, .037, .7, True)
+    _picanha_cut(batch, -.007, -.018, -.32, .140, .047, .029, 2.1, False)
+    _picanha_cut(batch, .011, -.051, -.08, .119, .041, .021, 4.3, False)
 
     # A low spoonful of bacon farofa; the outer grains break up the mound's edge.
     cx, cy, rx, ry = -.049, .076, .035, .024
@@ -220,9 +220,11 @@ def _rack_point(u, v):
     y = -.043 + .093*v + .008*u + .006*sin(5*u)
     y += .008*(1-v)**3*ridge - .006*v*v*u
     y -= .005*(1-v)*sin(pi*u)
+    y += .0048*cos(14*u+.8*v)*abs(2*v-1)**3
     bevel = .0035*(abs(2*u-1)**10 + abs(2*v-1)**8)
     z = .041 + .008*sin(pi*v) + .003*sin(pi*u) + .0029*ridge - bevel
     z += .0013*sin(19*u+3*v) + .0008*cos(31*v+9*u)*sin(45*u-6*v)
+    z += .0015*sin(26*u+4*cos(7*v))*sin(17*v+3*sin(11*u))
     return x, y, z
 
 
@@ -446,12 +448,12 @@ def salad():
     heart = material("coracao-romana", (.34, .55, .095), .47, .18)
     dressing = material("molho-caesar", (.76, .68, .47), .32, .38)
     parmesan = material("parmesao-curado", (.88, .73, .43), .61, .07)
-    for layer, count in enumerate((8, 6, 4)):
+    for layer, count in enumerate((9, 7, 4)):
         for i in range(count):
             a = (i*TAU/count + (0, .42, .93)[layer] + rng.uniform(-.15, .15))
             reach = (.089, .069, .046)[layer]*rng.uniform(.88, 1.04)
             length = (.084, .073, .058)[layer]*rng.uniform(.89, 1.08)
-            angle = a + rng.uniform(-.56, .56)
+            angle = a + rng.uniform(-.83, .83)
             root = (reach*cos(a)-length*cos(angle), reach*sin(a)-length*sin(angle))
             blade = heart if layer == 2 or (layer == 1 and i == 2) else P["lettuce"]
             _romaine(batch, pile, root, angle, length, rng.uniform(.033, .049),

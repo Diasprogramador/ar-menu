@@ -54,17 +54,26 @@ def add_color_variation():
         if bun:
             low = min(v.co.z for v in ob.data.vertices)
             span = max(v.co.z for v in ob.data.vertices) - low
+            center = [(min(v.co[i] for v in ob.data.vertices) + max(v.co[i] for v in ob.data.vertices))/2
+                      for i in (0, 1)]
         normal_matrix = ob.matrix_world.to_3x3().inverted_safe().transposed()
         for face in (() if ob.get("authored_uv") else ob.data.polygons):
             normal = normal_matrix @ face.normal
             axis = max(range(3), key=lambda i: abs(normal[i]))
+            if bun:
+                middle = face.center
+                longitude = math.atan2(middle.y-center[1], middle.x-center[0])/math.tau
             for loop in face.loop_indices:
                 pos = ob.matrix_world @ ob.data.vertices[ob.data.loops[loop].vertex_index].co
                 a, b = ((pos.y, pos.z), (pos.x, pos.z), (pos.x, pos.y))[axis]
                 if bun:
-                    # Continuous mapping around the dome, including its steep lip.
-                    flare = 1.4 - .55*(pos.z-low)/span
-                    a, b = pos.x*flare, pos.y*flare
+                    u = math.atan2(pos.y-center[1], pos.x-center[0])/math.tau
+                    u += round(longitude-u)
+                    level = (pos.z-low)/span
+                    if ob.name.startswith("Pao inferior"):
+                        level = .84-.81*level
+                    uv.data[loop].uv = (4*u, level)
+                    continue
                 uv.data[loop].uv = (a/.055, b/.055)
         base = mat.diffuse_color[:3]
         attr = ob.data.color_attributes.get("COLOR_0") or ob.data.color_attributes.new(name="COLOR_0",type="FLOAT_COLOR",domain="POINT")

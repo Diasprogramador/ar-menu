@@ -19,6 +19,18 @@ const sheets = await Promise.all(['ingredient-swatches.jpg', 'kitchen-swatches.j
 ));
 const cache = new Map();
 
+// Photographic swatches contain shadows and specular peaks from their capture.
+// Mix those toward the unlit ingredient colour before deriving runtime maps.
+const diffuseGround = new Map([
+  [1, [88, 53, 32, .27]], [2, [231, 164, 62, .55]], [3, [154, 69, 42, .19]],
+  [5, [204, 153, 90, .33]], [6, [239, 223, 178, .49]], [7, [107, 152, 56, .36]],
+  [8, [185, 127, 55, .38]], [9, [222, 171, 87, .32]], [10, [67, 39, 27, .38]],
+  [11, [240, 222, 183, .72]], [12, [100, 49, 31, .45]], [13, [157, 86, 73, .43]],
+  [14, [166, 66, 40, .34]], [16, [178, 53, 32, .28]], [17, [231, 203, 145, .32]],
+  [18, [229, 208, 158, .37]], [19, [125, 76, 51, .32]], [26, [230, 171, 167, .69]],
+  [27, [157, 39, 50, .4]], [28, [77, 41, 29, .64]], [31, [126, 87, 57, .46]],
+]);
+
 function texture(canvas, color = false) {
   const map = new THREE.CanvasTexture(canvas);
   map.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
@@ -39,7 +51,8 @@ function surface(index, roughness) {
   // Leave a gutter inside each source tile so adjacent foods never bleed.
   ctx.drawImage(sheet, index % 4 * tile + 6, Math.floor(index % 16 / 4) * tile + 6,
     tile - 12, tile - 12, 0, 0, size, size);
-  const { data } = ctx.getImageData(0, 0, size, size);
+  const pixels = ctx.getImageData(0, 0, size, size);
+  const { data } = pixels;
   const relief = createCanvas(size, size);
   const reliefCtx = relief.getContext('2d');
   const normals = reliefCtx.createImageData(size, size);
@@ -62,6 +75,23 @@ function surface(index, roughness) {
         (1 + 1 / length) * 127.5, 255], 4 * (y * size + x));
     }
   }
+  // The brioche UV runs from the pale expansion band to the egg-washed crown.
+  // Mirror-repeat around the circumference keeps both the colour and relief continuous.
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = 4*(y*size+x);
+      let ground = diffuseGround.get(index);
+      if (index === 0) {
+        const level = 1-y/(size-1) + .03*Math.cos(2*Math.PI*x/(size-1));
+        const browned = THREE.MathUtils.smoothstep(level, .04, .67);
+        ground = [226-56*browned, 181-80*browned, 115-69*browned, .76-.13*browned];
+      }
+      if (ground) {
+        for (let c = 0; c < 3; c++) data[i+c] += (ground[c]-data[i+c])*ground[3];
+      }
+    }
+  }
+  ctx.putImageData(pixels, 0, 0);
   reliefCtx.putImageData(normals, 0, 0);
   ormCtx.putImageData(packed, 0, 0);
   const roughnessMap = texture(orm);

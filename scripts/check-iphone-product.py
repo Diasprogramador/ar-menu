@@ -11,7 +11,7 @@ with sync_playwright() as playwright:
     page = browser.new_page(**playwright.devices["iPhone 13"])
     page.goto(menu + "/mesa/07")
     page.locator('a[href$="/produto/smash-bacon"]').first.click()
-    expect(page.get_by_role("heading", name="Smash Bacon", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Smash Bacon", exact=True, level=1)).to_be_visible()
     # Exercise a return visit after the initial precache finishes, including on slower networks.
     page.wait_for_function("async () => !!(await navigator.serviceWorker.getRegistration())?.active", timeout=90000)
     page.reload()

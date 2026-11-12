@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
-import { isTableHit, tableDistance } from './tableDistance';
+import { findTablePoint, TablePoseTracker } from './xrTable';
+import { tableDistance } from './tableDistance';
 import { applyPinch, clamp, scalePercentage, type PhysicalDimensions, type ScaleCalibration } from './scale';
 import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } from '@/features/models3d/modelLoader';
 
@@ -16,8 +17,8 @@ import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } fro
  *                          ↘ error / unsupported / denied
  *
  * Rastreamento de superfície usa a XRHitTestSource nativa: nada de simular
- * "chão" com uma altura fixa. Se o aparelho não fornece hit-test, a sessão nem
- * chega a ser pedida e a interface cai para o visualizador 3D.
+ * "chão" com uma altura fixa. Se o aparelho não fornece hit-test, a sessão não
+ * pode iniciar e a interface escolhe outro modo disponível.
  */
 
 export type ARSessionStatus =
@@ -49,14 +50,6 @@ type UseARSessionOptions = {
   onEvent?: (event: ARSessionEvent) => void;
 };
 
-type XRHitTestSource = {
-  cancel(): void;
-};
-
-type XRSessionLike = XRSession & {
-  requestHitTestSource?(options: { space: XRSpace }): Promise<XRHitTestSource>;
-};
-
 const RETICLE_RADIUS = 0.09;
 
 export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseARSessionOptions) {
@@ -72,52 +65,27 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
 
   /** Tudo que precisa ser desmontado quando a sessão termina. */
   const runtime = useRef<{
-    renderer: THREE.WebGLRenderer;
-    scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
     reticle: THREE.Mesh;
     model: THREE.Group;
     calibration: ScaleCalibration;
-    session: XRSessionLike;
-    hitTestSource: XRHitTestSource | null;
+    tracker: TablePoseTracker;
+    anchorSlot: { anchor?: XRAnchor } | null;
     placed: boolean;
     currentScale: number;
-    cleanup: (() => void)[];
   } | null>(null);
 
-  const generation = useRef(0);
-  const startingSession = useRef<XRSessionLike | null>(null);
+  const activeRun = useRef<(() => void)[] | null>(null);
   const emit = useRef(onEvent);
   useEffect(() => {
     emit.current = onEvent;
   }, [onEvent]);
 
   const teardown = useCallback(() => {
-    generation.current++;
-    void startingSession.current?.end().catch(() => undefined);
-    startingSession.current = null;
-    const current = runtime.current;
-    if (!current) return;
+    const cleanup = activeRun.current;
+    activeRun.current = null;
     runtime.current = null;
-
-    for (const fn of current.cleanup) {
-      try {
-        fn();
-      } catch {
-        /* segue o desligamento mesmo se um listener já saiu */
-      }
-    }
-
-    // Ending a native session can invalidate its hit source before the end event.
-    try { current.hitTestSource?.cancel(); } catch { /* already inactive */ }
-    current.renderer.setAnimationLoop(null);
-    current.scene.clear();
-    current.renderer.dispose();
-    current.renderer.domElement.remove();
-
-    // A sessão XR mantém a câmera ligada; encerrá-la é o que desliga o hardware
-    if (current.session.end) {
-      void current.session.end().catch(() => undefined);
+    for (const dispose of cleanup?.reverse() ?? []) {
+      try { dispose(); } catch { /* Native resources may already be inactive. */ }
     }
   }, []);
 
@@ -135,6 +103,9 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
   const reposition = useCallback(() => {
     const current = runtime.current;
     if (!current) return;
+    current.anchorSlot?.anchor?.delete();
+    current.anchorSlot = null;
+    current.tracker.reset();
     current.placed = false;
     current.model.visible = false;
     current.reticle.visible = false;
@@ -152,310 +123,288 @@ export function useARSession({ modelUrl, dimensions, placement, onEvent }: UseAR
   }, []);
 
   const start = useCallback(async () => {
+    // Keep the session request in the launch button's transient activation.
+    // The synchronous guard also covers two taps before React updates the button.
+    if (activeRun.current) return;
+    const cleanup: (() => void)[] = [];
+    activeRun.current = cleanup;
+    const isCurrent = () => activeRun.current === cleanup;
     setError(null);
     setDistance(null);
-    setStatus('checking');
+    setSurfaceFound(false);
+    setScalePercent(100);
+    setCalibration(null);
+    setProgress(0);
+    setStatus('requesting');
     emit.current?.({ type: 'opened' });
 
-    const id = ++generation.current;
-    setStatus('requesting');
-
     const overlayRoot = overlayRef.current;
-    let session: XRSessionLike;
+    let stage: 'request' | 'setup' | 'model' = 'request';
     try {
-      session = (await navigator.xr!.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test', 'local-floor'],
-        optionalFeatures: overlayRoot ? ['dom-overlay', 'light-estimation'] : ['light-estimation'],
+      if (!navigator.xr) throw new DOMException('WebXR indisponível', 'NotSupportedError');
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: overlayRoot ? ['anchors', 'dom-overlay'] : ['anchors'],
         ...(overlayRoot ? { domOverlay: { root: overlayRoot } } : {}),
-      })) as XRSessionLike;
-    } catch (sessionError) {
-      if (id !== generation.current) return;
-      const denied =
-        sessionError instanceof DOMException &&
-        (sessionError.name === 'NotAllowedError' || sessionError.name === 'SecurityError');
-      const failure: ARSessionError = denied
-        ? {
-            kind: 'permission',
-            message: 'Precisamos da câmera para posicionar o prato na sua mesa.',
-            hint: 'Toque no cadeado ao lado do endereço, libere a câmera e tente de novo.',
+      });
+      if (!isCurrent()) {
+        void session.end().catch(() => undefined);
+        return;
+      }
+
+      let ended = false;
+      const onEnd = () => {
+        ended = true;
+        stop();
+      };
+      session.addEventListener('end', onEnd);
+      cleanup.push(() => {
+        session.removeEventListener('end', onEnd);
+        if (!ended) void session.end().catch(() => undefined);
+      });
+
+      stage = 'setup';
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      cleanup.push(() => {
+        renderer.setAnimationLoop(null);
+        renderer.domElement.remove();
+        renderer.dispose();
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.78;
+      renderer.xr.enabled = true;
+      // Local is gravity-aligned and available in immersive sessions. A table
+      // measurement uses relative height, so it does not need a calibrated floor.
+      renderer.xr.setReferenceSpaceType('local');
+      renderer.domElement.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;';
+      document.body.appendChild(renderer.domElement);
+      await renderer.xr.setSession(session);
+      if (!isCurrent()) return;
+      const localSpace = renderer.xr.getReferenceSpace();
+      if (!localSpace) throw new Error('Referencial XR indisponível');
+      const viewerSpace = await session.requestReferenceSpace('viewer');
+      if (!isCurrent()) return;
+      const hitTestSource = await session.requestHitTestSource?.({ space: viewerSpace, entityTypes: ['plane'] });
+      if (!hitTestSource) throw new Error('Hit-test indisponível');
+      if (!isCurrent()) {
+        hitTestSource.cancel();
+        return;
+      }
+      cleanup.push(() => hitTestSource.cancel());
+
+      stage = 'model';
+      setStatus('loading-model');
+      const loaded = await loadGltf(modelUrl, {
+        onProgress: (ratio) => { if (isCurrent()) setProgress(ratio); },
+      });
+      if (!isCurrent()) return;
+      const prepared = prepareModel(loaded, dimensions, placement);
+      setCalibration(prepared.calibration);
+      stage = 'setup';
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const room = new RoomEnvironment();
+      try {
+        const environment = pmrem.fromScene(room, 0.04);
+        scene.environment = environment.texture;
+        cleanup.push(() => environment.dispose());
+      } finally {
+        room.dispose();
+        pmrem.dispose();
+      }
+      scene.environmentIntensity = 0.38;
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.4));
+      const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+      sun.position.set(0.5, 2, 1);
+      scene.add(sun);
+
+      const reticle = new THREE.Mesh(
+        new THREE.RingGeometry(RETICLE_RADIUS * 0.72, RETICLE_RADIUS, 40).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: 0xff6b2c, transparent: true, opacity: 0.92 }),
+      );
+      cleanup.push(() => {
+        reticle.geometry.dispose();
+        reticle.material.dispose();
+      });
+      reticle.visible = false;
+      const model = prepared.object;
+      model.visible = false;
+      scene.add(reticle, model);
+
+      const tracker = new TablePoseTracker();
+      const current: NonNullable<typeof runtime.current> = {
+        reticle, model, tracker, anchorSlot: null,
+        calibration: prepared.calibration,
+        placed: false,
+        currentScale: prepared.calibration.baseScale,
+      };
+      runtime.current = current;
+      cleanup.push(() => current.anchorSlot?.anchor?.delete());
+
+      const onSelect = (event: XRInputSourceEvent) => {
+        const point = tracker.confirmed(performance.now());
+        if (current.placed || !reticle.visible || !point || session.visibilityState !== 'visible') return;
+        model.position.set(point.x, point.y, point.z);
+        model.visible = true;
+        reticle.visible = false;
+        current.placed = true;
+        setStatus('placed');
+        emit.current?.({ type: 'placed' });
+
+        // Keep the local placement if the runtime cannot supply an anchor.
+        if (event.frame.createAnchor && typeof XRRigidTransform !== 'undefined') {
+          const slot: { anchor?: XRAnchor } = {};
+          current.anchorSlot = slot;
+          void event.frame.createAnchor(new XRRigidTransform({ x: point.x, y: point.y, z: point.z }), localSpace)
+            .then((anchor) => {
+              if (isCurrent() && current.anchorSlot === slot) slot.anchor = anchor;
+              else anchor.delete();
+            }).catch(() => undefined);
+        }
+      };
+      session.addEventListener('select', onSelect);
+      cleanup.push(() => session.removeEventListener('select', onSelect));
+      localSpace.addEventListener('reset', reposition);
+      cleanup.push(() => localSpace.removeEventListener('reset', reposition));
+      const onVisibility = () => {
+        tracker.reset();
+        reticle.visible = false;
+        setSurfaceFound(false);
+        setDistance(null);
+      };
+      session.addEventListener('visibilitychange', onVisibility);
+      cleanup.push(() => session.removeEventListener('visibilitychange', onVisibility));
+
+      // ----- gestos sobre o overlay -----
+      if (overlayRoot) {
+        const suppressControlSelection = (event: Event) => {
+          if (event.target instanceof Element && event.target.closest('[data-ar-control]')) event.preventDefault();
+        };
+        overlayRoot.addEventListener('beforexrselect', suppressControlSelection);
+        cleanup.push(() => overlayRoot.removeEventListener('beforexrselect', suppressControlSelection));
+        const pointers = new Map<number, { x: number; y: number }>();
+        let pinchStartDistance = 0;
+        let pinchStartScale = 1;
+        let rotateStartX = 0;
+        let rotateStartY = 0;
+
+        const distanceBetween = () => {
+          const [a, b] = [...pointers.values()];
+          if (!a || !b) return 0;
+          return Math.hypot(a.x - b.x, a.y - b.y);
+        };
+
+        /** Toques nos controles não devem girar nem escalar o prato. */
+        const isOnControl = (event: PointerEvent) =>
+          event.target instanceof Element && event.target.closest('[data-ar-control]') !== null;
+
+        const onPointerDown = (event: PointerEvent) => {
+          if (isOnControl(event)) return;
+          pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          const current = runtime.current;
+          if (!current?.placed) return;
+
+          if (pointers.size === 1) {
+            rotateStartX = event.clientX;
+            rotateStartY = current.model.rotation.y;
+          } else if (pointers.size === 2) {
+            pinchStartDistance = distanceBetween();
+            pinchStartScale = current.model.scale.x;
           }
-        : {
-            kind: 'session',
-            message: 'Não foi possível iniciar a realidade aumentada agora.',
-            hint: 'Feche outros aplicativos que estejam usando a câmera e tente novamente.',
-          };
+        };
+
+        const onPointerMove = (event: PointerEvent) => {
+          if (!pointers.has(event.pointerId)) return;
+          pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+          const current = runtime.current;
+          if (!current?.placed) return;
+
+          if (pointers.size === 1) {
+            // Arrastar com um dedo gira o prato no eixo vertical
+            current.model.rotation.y = rotateStartY + (event.clientX - rotateStartX) * 0.01;
+          } else if (pointers.size === 2 && pinchStartDistance > 0) {
+            const gesture = distanceBetween() / pinchStartDistance;
+            const target = applyPinch(
+              current.calibration.baseScale * pinchStartScale * gesture,
+              1,
+              current.calibration,
+            );
+            // model.scale é relativo à escala base já embutida no grupo preparado
+            const relative = clamp(target / current.calibration.baseScale, 0.5, 2);
+            current.model.scale.setScalar(relative);
+            current.currentScale = current.calibration.baseScale * relative;
+            setScalePercent(scalePercentage(current.currentScale, current.calibration.baseScale));
+          }
+        };
+
+        const onPointerUp = (event: PointerEvent) => {
+          pointers.delete(event.pointerId);
+          pinchStartDistance = 0;
+        };
+
+        overlayRoot.addEventListener('pointerdown', onPointerDown);
+        overlayRoot.addEventListener('pointermove', onPointerMove);
+        overlayRoot.addEventListener('pointerup', onPointerUp);
+        overlayRoot.addEventListener('pointercancel', onPointerUp);
+        cleanup.push(() => {
+          overlayRoot.removeEventListener('pointerdown', onPointerDown);
+          overlayRoot.removeEventListener('pointermove', onPointerMove);
+          overlayRoot.removeEventListener('pointerup', onPointerUp);
+          overlayRoot.removeEventListener('pointercancel', onPointerUp);
+        });
+      }
+
+      let nextReading = 0;
+      renderer.setAnimationLoop((time, frame) => {
+        if (!isCurrent() || !frame) return;
+        const viewer = session.visibilityState === 'visible' ? frame.getViewerPose(localSpace) : null;
+        if (!current.placed) {
+          const point = viewer ? findTablePoint(viewer, frame.getHitTestResults(hitTestSource), localSpace) : null;
+          const confirmed = tracker.update(point, time);
+          reticle.visible = Boolean(confirmed);
+          if (confirmed) reticle.position.set(confirmed.x, confirmed.y, confirmed.z);
+          setSurfaceFound(reticle.visible);
+        } else {
+          const anchor = current.anchorSlot?.anchor;
+          const pose = anchor && frame.getPose(anchor.anchorSpace, localSpace);
+          model.visible = Boolean(viewer && !viewer.emulatedPosition && (!anchor || (pose && !pose.emulatedPosition)));
+          if (model.visible && pose) model.position.copy(pose.transform.position);
+        }
+
+        if (!viewer || viewer.emulatedPosition || !(current.placed ? model.visible : reticle.visible)) {
+          setDistance(null);
+          nextReading = 0;
+        } else if (time >= nextReading) {
+          setDistance(tableDistance(viewer.transform.position, current.placed ? model.position : reticle.position));
+          nextReading = time + 200;
+        }
+        renderer.render(scene, camera);
+      });
+      setStatus('scanning');
+      emit.current?.({ type: 'ready' });
+    } catch (cause) {
+      if (!isCurrent()) return;
+      teardown();
+      const name = cause && typeof cause === 'object' && 'name' in cause ? cause.name : undefined;
+      let failure: ARSessionError;
+      if (stage === 'model') {
+        failure = { kind: 'model', message: cause instanceof ModelLoadError ? cause.message : 'Falha ao carregar o modelo 3D.' };
+      } else if (stage === 'request' && (name === 'NotAllowedError' || name === 'SecurityError')) {
+        failure = { kind: 'permission', message: 'O navegador não autorizou a realidade aumentada.' };
+      } else if (stage === 'request' && name === 'NotSupportedError') {
+        failure = { kind: 'unsupported', message: 'Este aparelho não oferece o rastreamento de superfície necessário.' };
+      } else {
+        failure = { kind: 'session', message: 'Não foi possível iniciar o rastreamento de superfície.' };
+      }
       setError(failure);
       setStatus('error');
       emit.current?.({ type: 'failed', reason: failure.kind });
-      return;
     }
-
-    if (id !== generation.current) {
-      void session.end().catch(() => undefined);
-      return;
-    }
-    startingSession.current = session;
-    const endDuringLoad = () => {
-      if (generation.current !== id) return;
-      generation.current++;
-      startingSession.current = null;
-      setStatus('idle');
-    };
-    session.addEventListener('end', endDuringLoad, { once: true });
-
-    setStatus('loading-model');
-    let prepared;
-    try {
-      const loaded = await loadGltf(modelUrl, { onProgress: setProgress });
-      if (id !== generation.current) return;
-      prepared = prepareModel(loaded, dimensions, placement);
-      setCalibration(prepared.calibration);
-    } catch (loadError) {
-      if (id !== generation.current) return;
-      teardown();
-      const failure: ARSessionError = {
-        kind: 'model',
-        message:
-          loadError instanceof ModelLoadError
-            ? loadError.message
-            : 'Não foi possível carregar o modelo 3D deste prato.',
-        hint: 'Você ainda pode ver as fotos e as dimensões do prato.',
-      };
-      setError(failure);
-      setStatus('error');
-      emit.current?.({ type: 'failed', reason: 'model' });
-      return;
-    }
-
-    // ----- cena -----
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.78;
-    renderer.xr.enabled = true;
-    renderer.domElement.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;';
-    document.body.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-
-    // Mapa de ambiente: sem ele, `clearcoat` e `roughness` baixa não têm o que
-    // refletir, e o prato chega na câmera fosco — que era metade do motivo de
-    // a comida parecer massinha aqui, mesmo depois de os modelos melhorarem.
-    // `RoomEnvironment` é gerado em memória: dá reflexo PBR crível sem baixar
-    // um HDRI e sem custo de rede no meio da experiência.
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const ambiente = pmrem.fromScene(new RoomEnvironment(), 0.04);
-    scene.environment = ambiente.texture;
-    scene.environmentIntensity = 0.38;
-
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.4));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-    sun.position.set(0.5, 2, 1);
-    scene.add(sun);
-
-    const reticle = new THREE.Mesh(
-      new THREE.RingGeometry(RETICLE_RADIUS * 0.72, RETICLE_RADIUS, 40).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xff6b2c, transparent: true, opacity: 0.92 }),
-    );
-    reticle.matrixAutoUpdate = false;
-    reticle.visible = false;
-    scene.add(reticle);
-
-    const model = prepared.object;
-    model.visible = false;
-    scene.add(model);
-
-    let localSpace: XRReferenceSpace | null;
-    let hitTestSource: XRHitTestSource | null = null;
-    try {
-      await renderer.xr.setSession(session);
-      const viewerSpace = await session.requestReferenceSpace('viewer');
-      localSpace = renderer.xr.getReferenceSpace();
-      hitTestSource = await session.requestHitTestSource?.({ space: viewerSpace }) ?? null;
-    } catch {
-      localSpace = null;
-    }
-    if (!localSpace || !hitTestSource || id !== generation.current) {
-      session.removeEventListener('end', endDuringLoad);
-      ambiente.dispose();
-      pmrem.dispose();
-      renderer.dispose();
-      renderer.domElement.remove();
-      if (id !== generation.current) return;
-      teardown();
-      setError({ kind: 'session', message: 'Este aparelho não conseguiu detectar superfícies.' });
-      setStatus('error');
-      emit.current?.({ type: 'failed', reason: 'hit-test' });
-      return;
-    }
-
-    session.removeEventListener('end', endDuringLoad);
-    startingSession.current = null;
-    const cleanup: (() => void)[] = [];
-    // O mapa de ambiente é uma textura de GPU: sem liberar, cada sessão de AR
-    // deixa uma para trás.
-    cleanup.push(() => {
-      ambiente.dispose();
-      pmrem.dispose();
-    });
-
-    runtime.current = {
-      renderer,
-      scene,
-      camera,
-      reticle,
-      model,
-      calibration: prepared.calibration,
-      session,
-      hitTestSource,
-      placed: false,
-      currentScale: prepared.calibration.baseScale,
-      cleanup,
-    };
-
-    // ----- posicionamento -----
-    const onSelect = () => {
-      const current = runtime.current;
-      if (!current || current.placed || !current.reticle.visible) return;
-
-      current.model.position.setFromMatrixPosition(current.reticle.matrix);
-      // Mantém o prato em pé: só herdamos a rotação em Y da superfície
-      const surfaceRotation = new THREE.Quaternion().setFromRotationMatrix(current.reticle.matrix);
-      const euler = new THREE.Euler().setFromQuaternion(surfaceRotation, 'YXZ');
-      current.model.rotation.set(0, euler.y, 0);
-
-      current.model.visible = true;
-      current.reticle.visible = false;
-      current.placed = true;
-      setStatus('placed');
-      emit.current?.({ type: 'placed' });
-    };
-    session.addEventListener('select', onSelect);
-    cleanup.push(() => session.removeEventListener('select', onSelect));
-
-    const onSessionEnd = () => {
-      teardown();
-      setStatus('idle');
-      setSurfaceFound(false);
-      emit.current?.({ type: 'exited' });
-    };
-    session.addEventListener('end', onSessionEnd);
-    cleanup.push(() => session.removeEventListener('end', onSessionEnd));
-
-    // ----- gestos sobre o overlay -----
-    if (overlayRoot) {
-      const suppressControlSelection = (event: Event) => {
-        if (event.target instanceof Element && event.target.closest('[data-ar-control]')) event.preventDefault();
-      };
-      overlayRoot.addEventListener('beforexrselect', suppressControlSelection);
-      cleanup.push(() => overlayRoot.removeEventListener('beforexrselect', suppressControlSelection));
-      const pointers = new Map<number, { x: number; y: number }>();
-      let pinchStartDistance = 0;
-      let pinchStartScale = 1;
-      let rotateStartX = 0;
-      let rotateStartY = 0;
-
-      const distanceBetween = () => {
-        const [a, b] = [...pointers.values()];
-        if (!a || !b) return 0;
-        return Math.hypot(a.x - b.x, a.y - b.y);
-      };
-
-      /** Toques nos controles não devem girar nem escalar o prato. */
-      const isOnControl = (event: PointerEvent) =>
-        event.target instanceof Element && event.target.closest('[data-ar-control]') !== null;
-
-      const onPointerDown = (event: PointerEvent) => {
-        if (isOnControl(event)) return;
-        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        const current = runtime.current;
-        if (!current?.placed) return;
-
-        if (pointers.size === 1) {
-          rotateStartX = event.clientX;
-          rotateStartY = current.model.rotation.y;
-        } else if (pointers.size === 2) {
-          pinchStartDistance = distanceBetween();
-          pinchStartScale = current.model.scale.x;
-        }
-      };
-
-      const onPointerMove = (event: PointerEvent) => {
-        if (!pointers.has(event.pointerId)) return;
-        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-        const current = runtime.current;
-        if (!current?.placed) return;
-
-        if (pointers.size === 1) {
-          // Arrastar com um dedo gira o prato no eixo vertical
-          current.model.rotation.y = rotateStartY + (event.clientX - rotateStartX) * 0.01;
-        } else if (pointers.size === 2 && pinchStartDistance > 0) {
-          const gesture = distanceBetween() / pinchStartDistance;
-          const target = applyPinch(
-            current.calibration.baseScale * pinchStartScale * gesture,
-            1,
-            current.calibration,
-          );
-          // model.scale é relativo à escala base já embutida no grupo preparado
-          const relative = clamp(target / current.calibration.baseScale, 0.5, 2);
-          current.model.scale.setScalar(relative);
-          current.currentScale = current.calibration.baseScale * relative;
-          setScalePercent(scalePercentage(current.currentScale, current.calibration.baseScale));
-        }
-      };
-
-      const onPointerUp = (event: PointerEvent) => {
-        pointers.delete(event.pointerId);
-        pinchStartDistance = 0;
-      };
-
-      overlayRoot.addEventListener('pointerdown', onPointerDown);
-      overlayRoot.addEventListener('pointermove', onPointerMove);
-      overlayRoot.addEventListener('pointerup', onPointerUp);
-      overlayRoot.addEventListener('pointercancel', onPointerUp);
-      cleanup.push(() => {
-        overlayRoot.removeEventListener('pointerdown', onPointerDown);
-        overlayRoot.removeEventListener('pointermove', onPointerMove);
-        overlayRoot.removeEventListener('pointerup', onPointerUp);
-        overlayRoot.removeEventListener('pointercancel', onPointerUp);
-      });
-    }
-
-    // ----- loop de render -----
-    let nextReading = 0;
-    const surface = new THREE.Vector3();
-    renderer.setAnimationLoop((time, frame) => {
-      const current = runtime.current;
-      if (!current || !frame) return;
-
-      const viewer = localSpace && frame.getViewerPose(localSpace);
-      if (!current.placed && localSpace && current.hitTestSource) {
-        const results = frame.getHitTestResults(current.hitTestSource as unknown as globalThis.XRHitTestSource);
-        const pose = results[0]?.getPose(localSpace);
-        current.reticle.visible = isTableHit(viewer, pose);
-        if (current.reticle.visible && pose) current.reticle.matrix.fromArray(pose.transform.matrix);
-        setSurfaceFound(current.reticle.visible);
-      }
-
-      if (!viewer || viewer.emulatedPosition || (!current.placed && !current.reticle.visible)) {
-        setDistance(null);
-        nextReading = 0;
-      } else if (time >= nextReading) {
-        const target = current.placed ? current.model.position : surface.setFromMatrixPosition(current.reticle.matrix);
-        setDistance(tableDistance(viewer.transform.position, target));
-        nextReading = time + 200;
-      }
-
-      renderer.render(current.scene, current.camera);
-    });
-
-    setStatus('scanning');
-    emit.current?.({ type: 'ready' });
-  }, [modelUrl, dimensions, placement, teardown]);
+  }, [modelUrl, dimensions, placement, reposition, stop, teardown]);
 
   return {
     status,

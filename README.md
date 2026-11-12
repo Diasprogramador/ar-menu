@@ -141,20 +141,15 @@ ou publique em qualquer host com HTTPS (Vercel, Netlify, Cloudflare Pages).
 |---|---|---|---|
 | 1 | WebXR `immersive-ar` | Serviços de RA do Google (Android) | superfície + translação |
 | 2 | AR Quick Look | iOS com `.usdz` no produto | superfície + translação |
-| 3 | **Câmera + controle manual** | qualquer navegador com HTTPS e câmera | posição visual fixa + gestos |
+| 3 | **Câmera no navegador** | HTTPS, câmera traseira e WebGL | QR métrico, detalhes do tampo e controles por toque |
 | 4 | Visualizador 3D | WebGL | — |
 | 5 | Ficha com fotos | — | — |
 
-O caminho 3 garante uma visualização sobre a câmera **sem instalar nada**. Boa
-parte dos Android não tem os Serviços de RA do Google, e o iOS não implementa
-WebXR — nesses casos o app abre a câmera diretamente, posiciona o prato e congela
-a câmera virtual para impedir deriva. Um dedo gira o modelo e a pinça aproxima
-ou afasta.
-
-O que ele não faz, e a interface diz isso: acompanhar deslocamento físico. Sem
-SLAM não há como saber que o aparelho andou. Caminhar ao redor e aproximar o
-celular fisicamente ficam disponíveis no WebXR/ARCore e no Quick Look; no modo
-universal, essas ações são feitas manualmente por gestos.
+No modo de câmera, toque em um detalhe do tampo e mova o celular devagar. A
+imagem da câmera fornece referências visuais para acompanhar pequenos
+deslocamentos. Para estimar a distância automaticamente, coloque na mesa o QR
+do painel **QR Codes → Imprimir folha**. Imprima a 100% e confira os 5 cm do
+quadrado preto. O Brasa & Mesa tem um [cartão pronto para impressão](public/demo/cartao-brasa-e-mesa.pdf).
 
 Nenhum desses caminhos leva a uma tela quebrada, e o botão de adicionar ao
 pedido está presente em todos. Quando a câmera não abre, a tela mostra **"Por
@@ -231,14 +226,10 @@ toca em "Ver na minha mesa". Recharts idem, só no painel.
 
 ## Limitações conhecidas
 
-- **A câmera universal não acompanha deslocamento físico.** Para não derivar,
-  ela congela a câmera virtual após o posicionamento e oferece órbita e zoom por
-  gestos. Rastreamento 6DoF real depende de WebXR/ARCore ou Quick Look; uma
-  alternativa realmente universal exigiria um marcador físico sobre a mesa.
-- **A escala na câmera universal pede um ajuste.** O navegador não expõe a
-  distância focal, então assumimos um campo de visão típico e deixamos a altura
-  do aparelho sobre a mesa num controle deslizante. Um gesto do cliente, uma
-  vez, e o tamanho passa a ser fiel.
+- **Câmera comum.** A estimativa pelo cartão depende do tamanho impresso e da
+  lente. Sem cartão, a escala exige uma régua ou a altura informada. Uma mesa
+  lisa pode exigir posicionamento manual. Ao perder uma referência já adquirida,
+  a interface oculta o prato e orienta o cliente a recuperá-la.
 - **AR nativa no iPhone depende de USDZ por produto.** Os 19 pratos de
   demonstração têm os dois formatos gerados pelo pipeline Blender; um prato novo
   enviado pelo painel usa a câmera universal até o restaurante subir o USDZ.

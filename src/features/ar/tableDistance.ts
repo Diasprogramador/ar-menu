@@ -1,9 +1,11 @@
 type Point = { x: number; y: number; z: number };
 
 /** Approximate lens angle on the long sensor axis, then apply the video's CSS object-cover crop. */
-export function cameraVerticalFov(videoWidth: number, videoHeight: number, width: number, height: number) {
+export const DEFAULT_FOCAL_RATIO = 1 / (2 * Math.tan(33 * Math.PI / 180));
+export function cameraVerticalFov(videoWidth: number, videoHeight: number, width: number, height: number,
+  focalRatio = DEFAULT_FOCAL_RATIO) {
   const cover = Math.max(width / videoWidth, height / videoHeight);
-  const focalPx = Math.max(videoWidth, videoHeight) * cover / (2 * Math.tan(33 * Math.PI / 180));
+  const focalPx = Math.max(videoWidth, videoHeight) * cover * focalRatio;
   return 2 * Math.atan(height / (2 * focalPx)) * 180 / Math.PI;
 }
 

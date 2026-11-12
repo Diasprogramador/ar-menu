@@ -107,11 +107,13 @@ def pudding():
         return r*(1+.004*cos(6*a+.3)), z
 
     seam = (42.5, 52)
-    _turned("Flan de leite condensado", [(43, 6.9), (48.8, 7.3), (50.3, 9),
-            (50.6, 12), (49.8, 17), seam], P["custard"], 112, mold, caps=(True, False))
+    # A tube mould leaves a tapered inner wall. Join both walls at the glaze.
+    _turned("Flan de leite condensado", [(12, 54.3), (10.5, 49), (9.2, 9),
+            (10.5, 7), (43, 6.9), (48.8, 7.3), (50.3, 9),
+            (50.6, 12), (49.8, 17), seam], P["custard"], 112, mold, caps=(False, False))
     _turned("Coroa de açúcar queimado", [seam, (42.15, 53.5), (41.1, 55.3),
-            (38.8, 56.4), (31, 56.65), (16, 56.9), (0, 57)], P["caramel"], 112, mold,
-            caps=(False, True))
+            (38.8, 56.4), (31, 56.85), (20, 57), (14.2, 56.55), (12, 54.3)], P["caramel"], 112, mold,
+            caps=(False, False))
 
 
 def _scoop(cx, cy, base, scale=1):
@@ -124,9 +126,9 @@ def _scoop(cx, cy, base, scale=1):
     def scraped(k, a, r, z):
         edge = math.exp(-((z-5)/4)**2)
         x, y = r*cos(a), r*sin(a)
-        folds = .55*sin(.23*x+.09*y+.15*z) + .25*cos(.49*y-.13*z)
+        folds = .95*sin(.23*x+.09*y+.15*z) + .48*cos(.49*y-.13*z)
         ripple = sin(9*a+.45*sin(3*a)) + .42*sin(14*a+.6)
-        radius = r + r/25*(1.6*edge*ripple + folds)
+        radius = r + r/25*(2.4*edge*ripple + folds + .9*cos(3*a+.07*z))
         return scale*radius, base+scale*(z + r/25*(.65*ripple*edge+folds))
 
     # The last pole bypasses the shape callback.
@@ -155,7 +157,7 @@ def _walnut_brownie():
 
     def cut_edge(k, a, r, z):
         square = (abs(cos(a)/36)**10 + abs(sin(a)/30)**10)**(-.1)
-        crumb = .47*sin(31*a+1.2*k) + .36*cos(19*a-.7*k)
+        crumb = .81*sin(31*a+1.2*k) + .56*cos(19*a-.7*k) + .85*cos(4*a+.43*k)
         return r*square + crumb, z+.44*sin(13*a+.8*k)
 
     _turned("Brownie de chocolate 70 por cento", [(.91, 6.5), (.98, 8), (1, 16),
@@ -367,6 +369,23 @@ def _glass(top, foot, lip, pressed=False):
              (lip-1.13,top+.05),(lip-1.64,top-.65),(lip-1.7,top-2.2),
              (foot+2.65,61),(foot+.1,10),(foot-.8,8),(foot-3,7.4),(0,7.4)],
             P["glass"], 96, facets)
+    _condensation(12, top-6, lambda z: foot+1.8+(2.6*(z-9)/52 if z <= 61
+                  else 2.6+(lip-foot-4.4)*(z-61)/(top-63)))
+
+
+def _condensation(low, high, radius):
+    drops = _Batch()
+    for i in range(122):
+        z = rng.uniform(low, high)
+        a = rng.uniform(0, TAU)
+        if sin(3*a+.048*z)+.6*cos(7*a-.022*z) < -.4:
+            continue
+        s = rng.uniform(.32,.85)
+        r = radius(z) + .08
+        drops.blob((r*cos(a),r*sin(a),z), (.55*s,s,s*rng.uniform(1,1.9)), a,
+                   sides=8, belts=4)
+    drops.emit("Condensação no vidro frio", material("gotas-frias",(.83,.89,.86),.10,
+               .4,alpha=.42,transmission=.62))
 
 
 def _drink_fill(name, top, foot, lip, mat):
@@ -543,6 +562,7 @@ def water_bottle():
         return r,z
 
     _turned("Garrafa mineral de vidro",wall,P["glass"],108,bottle_flutes)
+    _condensation(23, 146, lambda z: 31.7 if z < 76 or z > 119 else 31.86)
     _turned("Água mineral com menisco",[(0,9.4),(13,9.4),(21,8.3),(26.6,9),(28.6,13.5),
             (29.45,23),(29.45,144),(29,151),(26.7,158.6),(23.2,164.8),(18.5,172.8),
             (14.8,180.8),(12.1,188.8),(11.25,196),(11.25,200),(10.8,199.8),(0,199.5)],P["water"])

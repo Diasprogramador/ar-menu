@@ -177,7 +177,7 @@ do navegador tem verificação no banco.
 
 - A câmera é solicitada só quando o cliente inicia a AR, e a sessão encerra ao
   sair da tela.
-- Nenhum quadro da câmera é lido, gravado ou enviado.
+- O modo de câmera lê quadros em memória para localizar o tampo e ajustar a luz. Os quadros permanecem no aparelho e são descartados após o processamento.
 - O identificador de sessão do cliente é anônimo, vive no `sessionStorage` e some
   quando a aba fecha.
 - O pedido guarda nome e telefone apenas quando o cliente digita.

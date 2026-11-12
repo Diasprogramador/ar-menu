@@ -19,16 +19,16 @@ def ring_mesh(name, rows, sampler, finish, segments=96):
 def pizza(slug, topping):
     phase = rng.random()*TAU
     def edge(a):
-        return .15*(1+.016*math.sin(3*a+phase)+.013*math.cos(5*a)+.008*math.sin(11*a))
+        return .15*(1+.024*math.sin(3*a+phase)+.019*math.cos(5*a)+.011*math.sin(11*a))
 
-    pockets = [(a*TAU/17+rng.uniform(-.11,.11), rng.uniform(.002,.009),rng.uniform(.045,.13))
+    pockets = [(a*TAU/17+rng.uniform(-.15,.15), rng.uniform(.002,.011),rng.uniform(.045,.16))
                for a in range(17)]
     def rim_height(a):
         return sum(h*math.exp(-((math.remainder(a-p,TAU)/w)**2)) for p,h,w in pockets)
 
     def crust(row, a):
         fraction, height, puff = row
-        radius = edge(a)*fraction
+        radius = edge(a)*fraction*(1 + .024*puff*math.sin(7*a+phase))
         return (radius*math.cos(a),radius*math.sin(a),height+puff*rim_height(a))
 
     ring_mesh("Cornicione alveolado", [
@@ -50,7 +50,7 @@ def pizza(slug, topping):
     if topping == "pepperoni":
         # Raised, irregular rims with shallow oil-catching cups.
         for i in range(23):
-            a=i*2.39996+phase+rng.uniform(-.09,.09)
+            a=i*2.39996+phase+rng.uniform(-.19,.19)
             dist=.115*math.sqrt((i+.4)/23)
             x,y=dist*math.cos(a),dist*math.sin(a)
             radius=rng.uniform(.014,.020)
@@ -59,22 +59,26 @@ def pizza(slug, topping):
                 fraction, height=row
                 rr=radius*fraction*(1+.045*math.sin(5*t+direction))
                 xx,yy=x+rr*math.cos(t),y+rr*math.sin(t)
-                return xx,yy,base_z(xx,yy)+.002+height*(1+.35*math.sin(3*t+direction))
+                curl = 1+.55*math.sin(2*t+direction)+.22*math.cos(5*t-direction)
+                return xx,yy,base_z(xx,yy)+.002+height*curl
             ring_mesh("Pepperoni em concha",[(.001,0),(.94,.001),(1,.005),(.96,.006),
                       (.83,.003),(.55,.0017),(.001,.0015)],salami,P["pepperoni"],32)
     else:
-        for i in range(13 if topping=="margherita" else 27):
+        count = 10 if topping=="margherita" else 23
+        parmesan = material("parmesao-gratinado", (.75,.57,.29), .55, .12)
+        for i in range(count):
             a=i*2.39996+phase+rng.uniform(-.16,.16)
-            dist=.109*math.sqrt((i+.45)/(13 if topping=="margherita" else 27))
+            dist=.109*math.sqrt((i+.45)/count)
             x,y=dist*math.cos(a),dist*math.sin(a)
-            finish=P["mozzarella"] if topping=="margherita" else (P["mozzarella"],P["cheese"],material("gorgonzola-cremoso",(.78,.74,.53),.54,.12))[i%3]
-            r=rng.uniform(.016,.030) if topping=="margherita" else rng.uniform(.006,.014)
+            finish=P["mozzarella"] if topping=="margherita" else (P["cream"],parmesan,material("gorgonzola-cremoso",(.78,.74,.53),.54,.12))[i%3]
+            r=rng.uniform(.023,.039) if topping=="margherita" else rng.uniform(.009,.019)
             offset=rng.random()*TAU
             def melted(row,t):
                 frac,h=row
-                rr=frac*r*(1+.14*math.sin(3*t+offset)+.09*math.cos(5*t))
-                xx,yy=x+rr*math.cos(t),y+rr*.8*math.sin(t)
-                return xx,yy,base_z(xx,yy)+.0017+h
+                rr=frac*r*(1+.22*math.sin(3*t+offset)+.13*math.cos(5*t-offset)+.05*math.sin(9*t))
+                u,v=rr*math.cos(t),rr*.8*math.sin(t)
+                xx,yy=x+u*math.cos(offset)-v*math.sin(offset),y+u*math.sin(offset)+v*math.cos(offset)
+                return xx,yy,base_z(xx,yy)+.0017+h*(1+.28*math.sin(4*t)*frac)
             ring_mesh("Ilha de queijo fundido",[(.999,0),(.94,.001),(.68,.0035),(.32,.004),(.001,.003)],
                       melted,finish,28)
             if topping == "four-cheese" and i % 3 == 2:
@@ -100,9 +104,3 @@ def pizza(slug, topping):
                     x,y=rr*math.cos(a),rr*math.sin(a)
                     pts.append((x,y,base_z(x,y)+.005))
                 tube("Mel de laranjeira",pts,.00075,P["honey"])
-    # Scorched blisters follow the rim profile and vary in size with pocket height.
-    for a,h,w in pockets:
-        d=edge(a)*.945
-        ob=ellipsoid("Bolha de forno",(d*math.cos(a),d*math.sin(a),.021+rim_height(a)),
-                     (.003+w*.035,.002+h*.22,.0013),P["char"],.28,12,6)
-        ob.rotation_euler.z=a+math.pi/2

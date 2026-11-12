@@ -68,11 +68,13 @@ export function ARExperience({
     dimensions,
     placement,
     onEvent: (event) => {
-      if (event.type === 'failed') {
-        // Falhou o caminho imersivo, mas ainda há câmera: não caia direto
-        // para o 3D sem tentar mostrar o prato na mesa.
-        setFallbackReason('A realidade aumentada imersiva não abriu. Vamos usar a câmera.');
-        setMode('camera');
+      if (event.type === 'failed' && capabilities) {
+        setFallbackReason('Não foi possível abrir a realidade aumentada neste navegador.');
+        setMode(resolveARMode({ ...capabilities, immersiveAR: false }, {
+          hasModel: Boolean(model.model_url),
+          hasUsdz: Boolean(model.usdz_url),
+          arEnabled: model.ar_enabled,
+        }));
       }
       onEvent?.(event.type);
     },
@@ -168,9 +170,9 @@ export function ARExperience({
               error={session.error}
               onStart={() => void session.start()}
               onFallback={() => {
+                if (session.status !== 'idle') session.stop();
                 setFallbackReason(session.error?.hint ?? null);
-                setMode('viewer-3d');
-                onEvent?.('3d');
+                setMode(capabilities.webgl ? 'viewer-3d' : 'none');
               }}
             />
           )}
@@ -204,7 +206,7 @@ export function ARExperience({
           {capabilities.camera && capabilities.webgl && capabilities.secureContext && (
             <button type="button" className="mt-4 px-3 py-2 text-sm text-paper underline"
               onClick={() => setMode('camera')}>
-              Estimar distância com uma régua
+              Usar a câmera do navegador
             </button>
           )}
           <button
@@ -279,6 +281,7 @@ export function ARExperience({
                       : 'idle'
               }
               progress={camera.progress}
+              directCamera
               error={camera.error}
               onStart={() => void camera.start()}
               onFallback={() => {
@@ -542,6 +545,7 @@ function ARLaunchPanel({
   capabilities,
   status,
   progress,
+  directCamera = false,
   error,
   onStart,
   onFallback,
@@ -552,6 +556,7 @@ function ARLaunchPanel({
   capabilities: ARCapabilities;
   status: ReturnType<typeof useARSession>['status'];
   progress: number;
+  directCamera?: boolean;
   // As duas sessões falham por motivos diferentes, mas o painel só precisa da
   // mensagem e da dica — o tipo aqui é o que os dois têm em comum.
   error: { message: string; hint?: string } | null;
@@ -566,9 +571,13 @@ function ARLaunchPanel({
         <div className="mx-auto mb-6 h-px w-16 ember-rule" />
         <h2 className="font-display text-[28px] text-paper">Ver na minha mesa</h2>
         <p className="mt-2 text-sm text-paper/70">
-          A câmera vai abrir. Aponte para a mesa, mova o celular devagar e toque na tela para
-          posicionar o prato em tamanho real.
+          {directCamera ? 'Toque em um detalhe da mesa para apoiar o prato. Para medir a distância automaticamente, enquadre o cartão de 5 cm do restaurante.'
+            : 'Aponte para a mesa e mova o celular devagar. Quando aparecer o círculo, toque para apoiar o prato.'}
         </p>
+        {directCamera && !busy && window.location.pathname.split('/')[2] === 'brasa-e-mesa' && (
+          <a className="inline-block py-2 text-xs text-paper/80 underline underline-offset-4"
+            href="/demo/cartao-brasa-e-mesa.pdf" target="_blank" rel="noreferrer">Cartão de 5 cm para imprimir</a>
+        )}
 
         <dl className="mt-6 flex justify-center gap-6 text-left">
           <div>
@@ -649,7 +658,7 @@ function ARLiveControls({
 
   return (
     <>
-      <div className="flex flex-1 items-center justify-center px-8">
+      <div className="pointer-events-none flex flex-1 items-start justify-center px-8 pt-4">
         {!placed && (
           <p className="rounded-full bg-black/45 px-4 py-2 text-center text-sm text-paper backdrop-blur-sm">
             {session.surfaceFound
@@ -755,6 +764,9 @@ function CameraLiveControls({
 }) {
   const [mostrarAjuste, setMostrarAjuste] = useState(false);
   const colocado = camera.status === 'placed';
+  const temQR = camera.tracking === 'marker' || camera.tracking === 'lost';
+  const perdeuQR = camera.tracking === 'lost';
+  const perdeuTextura = camera.tracking === 'texture-lost';
 
   return (
     <>
@@ -764,21 +776,26 @@ function CameraLiveControls({
           colocado ? 'items-start pt-16' : 'items-center',
         )}
       >
-        {!colocado && (
+        {(!colocado || perdeuQR || perdeuTextura) && (
           <p className="rounded-full bg-black/45 px-4 py-2 text-center text-sm text-paper backdrop-blur-sm">
-            {camera.referenceHint ?? 'Aponte para a mesa e toque onde o prato deve ficar'}
+            {perdeuQR ? 'O QR saiu de vista. Enquadre o cartão deitado na mesa para recuperar o prato.'
+              : perdeuTextura ? 'Referência perdida. Toque em outro detalhe visível da mesa para posicionar novamente.'
+              : temQR ? 'Mesa localizada pelo QR. Toque onde deseja colocar o prato.'
+              : camera.referenceHint ?? 'Aponte para a mesa e toque onde o prato deve ficar'}
           </p>
         )}
-        {colocado && (
+        {colocado && !perdeuQR && !perdeuTextura && (
           <p className="pointer-events-none rounded-full bg-black/45 px-4 py-2 text-center text-sm text-paper/85 backdrop-blur-sm">
-            Arraste para girar · use dois dedos para aproximar
+            {temQR ? 'Mova o celular mantendo o QR visível'
+              : camera.tracking === 'texture' ? 'Mesa em foco · mova o celular devagar'
+              : 'Arraste para girar · use dois dedos para aproximar'}
           </p>
         )}
       </div>
 
       {camera.distance && camera.heightKnown && (
         <p className="mx-auto mb-2 rounded-full bg-black/65 px-4 py-2 text-center text-sm text-paper">
-          Distância estimada ≈ {camera.distance.rangeCm} cm · altura usada {camera.distance.heightCm} cm
+          Distância estimada ≈ {camera.distance.rangeCm} cm · {temQR ? 'altura pelo QR' : 'altura usada'} {camera.distance.heightCm} cm
         </p>
       )}
       {colocado && !camera.heightKnown && (
@@ -786,13 +803,23 @@ function CameraLiveControls({
           Calibre a câmera para estimar a distância até o prato.
         </p>
       )}
-      {!camera.referenceHint && (
+      {!temQR && camera.tracking !== 'texture' && !perdeuTextura && !camera.referenceHint && (
+        <p className="pointer-events-none mx-auto mb-2 max-w-xs rounded-lg bg-black/65 px-3 py-1.5 text-center text-xs text-paper">
+          {camera.tracking === 'sensor' ? 'Acompanhando a inclinação do celular. ' : 'Posicionamento manual. '}
+          Enquadre o QR de 5 cm do cardápio para acompanhar também o deslocamento.
+        </p>
+      )}
+      {perdeuQR && (
+        <button type="button" data-ar-control className="mx-auto mb-2 rounded-full bg-black/65 px-4 py-2 text-sm text-paper"
+          onClick={camera.switchToManual}>Continuar sem o QR</button>
+      )}
+      {mostrarAjuste && !temQR && !camera.referenceHint && (
         <button type="button" data-ar-control className="mx-auto mb-2 rounded-full bg-black/65 px-4 py-2 text-sm text-paper"
           onClick={() => { setMostrarAjuste(false); camera.calibrateReference(); }}>
           Calibrar distância com uma régua
         </button>
       )}
-      {mostrarAjuste && (
+      {mostrarAjuste && !temQR && (
         <div data-ar-control className="mx-4 mb-3 rounded-[10px] bg-black/65 p-4 backdrop-blur-sm">
           <label htmlFor="altura-mesa" className="text-[13px] text-paper">
             Altura do celular sobre a mesa
@@ -811,8 +838,7 @@ function CameraLiveControls({
             {Math.round(camera.alturaCm)} cm · Informe a altura para estimar o tamanho na câmera.
           </p>
           <p className="mt-2 text-[12px] text-paper/50">
-            Modo manual estável: o prato fica fixo na tela. Para caminhar ao redor e aproximar o
-            celular fisicamente, use um aparelho com WebXR/ARCore ou o Quick Look do iPhone.
+            Use o QR impresso sobre a mesa para estimar a distância enquanto move o celular.
           </p>
         </div>
       )}
@@ -835,14 +861,14 @@ function CameraLiveControls({
             {camera.scalePercent}% · voltar ao 1:1
           </button>
 
-          <ControlButton
+          {!temQR && <ControlButton
             label={mostrarAjuste ? 'Ocultar ajuste de escala' : 'Ajustar escala'}
             onClick={() => setMostrarAjuste((valor) => !valor)}
           >
             <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M4 7h12M4 13h12M8 4v6M13 10v6" strokeLinecap="round" />
             </svg>
-          </ControlButton>
+          </ControlButton>}
         </div>
 
         <div

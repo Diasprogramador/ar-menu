@@ -5,8 +5,36 @@ from mathutils import Vector
 from kitchen_geometry import P, TAU, bowl, ellipsoid, material, mesh, plate, rng, tube
 
 
+def toasted_flakes(shells, count):
+    """Seat angular panko fragments on the actual shell triangles."""
+    verts, faces = [], []
+    for ob in shells:
+        transform = ob.rotation_euler.to_matrix()
+        polygons = ob.data.polygons
+        for face in rng.choices(list(polygons), weights=[p.area for p in polygons], k=count):
+            n = (transform @ face.normal).normalized()
+            if n.length < .9:
+                continue
+            ref = n.orthogonal().normalized()
+            side = n.cross(ref)
+            a = rng.random()*TAU
+            along = ref*math.cos(a)+side*math.sin(a)
+            across = n.cross(along)
+            length = rng.uniform(.0007,.0019)
+            width = length*rng.uniform(.34,.65)
+            anchor = ob.location + transform @ face.center
+            anchor += along*rng.uniform(-.0006,.0006)
+            i = len(verts)
+            verts.extend((anchor-along*length, anchor+across*width,
+                          anchor+along*length, anchor-across*width, anchor+n*width))
+            faces.extend((i+j,i+4,i+(j+1)%4) for j in range(4))
+    mesh("Migalhas tostadas salientes", verts, faces,
+         material("panko-tostado", (.48,.24,.066), .81))
+
+
 def croquettes():
     plate(.12)
+    shells = []
     bowl((.054,.064,.006),.030,P["cream"])
     pts=[]
     for j in range(40):
@@ -18,8 +46,10 @@ def croquettes():
         x,y=.054+r*math.cos(a),.064+r*math.sin(a)
         tube("Raspa de limao",[(x,y,.026),(x+.002,y+.0006,.0266)],.0003,P["lime"])
     for i,(x,y) in enumerate([(-.061,.039),(-.011,.062),(.004,.017),(-.057,-.014),(.062,.004)]):
-        ob=ellipsoid("Bolinho empanado",(x,y,.032),(.026,.023,.025),P["fried"],.11,28,15)
+        tall = rng.uniform(.022,.026)
+        ob=ellipsoid("Bolinho empanado",(x,y,.006+tall),(.026,.023,tall),P["fried"],.095,28,15)
         ob.rotation_euler.z=i*.93
+        shells.append(ob)
     # The sixth serving is split so both the fried shell and the filling can be seen.
     filling=material("costela-desfiada",(.27,.098,.045),.66,.08)
     for x,y,angle in [(-.023,-.060,-.38),(.031,-.052,.83)]:
@@ -35,6 +65,7 @@ def croquettes():
                     faces.append((b,c,c+n,b+n))
         shell=mesh("Casquinha partida",verts,faces,P["fried"])
         shell.location=(x,y,.028); shell.rotation_euler=(.37,0,angle)
+        shells.append(shell)
         def on_cut(pos):
             return shell.location + shell.rotation_euler.to_matrix() @ Vector(pos)
         cut=ellipsoid("Costela e catupiry",on_cut((0,0,.0003)),(.0234,.0234,.0033),filling,.066,26,12)
@@ -44,10 +75,12 @@ def croquettes():
             start=(.006*math.cos(t*4),-.009+t*.019,.0036)
             end=(start[0]+.002,start[1]+.004,.0039)
             tube("Veio de catupiry",[on_cut(start),on_cut(end)],.0014,P["cream"])
+    toasted_flakes(shells, 135)
 
 
 def onion_rings():
     plate(.115)
+    shells = []
     # A loose pile, with different diameters and cuts; the bottom ring rests on the plate.
     placements=[(-.047,.024,.019,.037,.13),(.042,.034,.018,.035,-.11),
                 (.038,-.039,.021,.038,.18),(-.046,-.039,.022,.034,-.21),
@@ -61,12 +94,15 @@ def onion_rings():
             for j in range(m):
                 t=TAU*j/m
                 crumb=.0065*(1+.15*math.cos(7*a+i)+rng.uniform(-.10,.10))
+                crumb *= 1+.14*math.sin(17*a+2*t+i)+.11*math.cos(31*a-t)
                 rr=center+crumb*math.cos(t)
                 verts.append((rr*math.cos(a),rr*.94*math.sin(a),crumb*math.sin(t)+.0012*math.cos(4*a)))
                 a0=k*m+j; b=((k+1)%n)*m+j
                 faces.append((a0,b,((k+1)%n)*m+(j+1)%m,k*m+(j+1)%m))
         ring=mesh("Anel de massa crocante",verts,faces,P["fried"])
         ring.location=(x,y,z);ring.rotation_euler=(tilt,.05,i*.91)
+        shells.append(ring)
+    toasted_flakes(shells, 100)
     for i in range(43):
         a=rng.random()*TAU; r=rng.uniform(.064,.093)
         ellipsoid("Farelo de empanado",(r*math.cos(a),r*math.sin(a),.0095),(.0018,.0013,.0009),
@@ -79,9 +115,9 @@ def fries():
     # Boat-shaped skin-on potato wedges, nested in three crossing layers.
     for i in range(24):
         layer=i//8
-        angle=(-.72,.93,-.52)[layer]+rng.uniform(-.39,.39)
-        across=((i%8)-3.5)*(.018-layer*.0014)
-        along=rng.uniform(-.021,.021)
+        angle=(-.72,.78,-.29)[layer]+rng.uniform(-.78,.78)
+        across=((i%8)-3.5)*(.019-layer*.0024)+rng.uniform(-.004,.004)
+        along=rng.uniform(-.032,.032)
         x=along*math.cos(angle)-across*math.sin(angle)
         y=along*math.sin(angle)+across*math.cos(angle)
         length=rng.uniform(.062,.097); width=rng.uniform(.011,.017)

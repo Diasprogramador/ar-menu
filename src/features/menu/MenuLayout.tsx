@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, Outlet, useParams } from 'react-router-dom';
+import { Link, Outlet, useMatch, useParams } from 'react-router-dom';
 
 import { MenuContext, type MenuContextValue } from './MenuContext';
 import { getMenu, getTableByCode, isRestaurantOpen } from './menuService';
+import './dining.css';
+import { MenuIcon } from './components/MenuIcon';
 import { CartBar } from '@/features/cart/CartBar';
 import { ErrorState } from '@/components/ui';
 import { RouteFallback } from '@/components/RouteFallback';
@@ -23,6 +25,7 @@ import type { MenuData, RestaurantTable } from '@/types/database';
  */
 export function MenuLayout() {
   const { slug = '', tableCode } = useParams();
+  const productRoute = useMatch('/r/:slug/produto/:productSlug');
   const [menu, setMenu] = useState<MenuData | null>(null);
   const [table, setTable] = useState<RestaurantTable | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'not-found' | 'error'>('loading');
@@ -92,7 +95,7 @@ export function MenuLayout() {
 
   return (
     <MenuContext.Provider value={value}>
-      <div className="menu-shell min-h-dvh bg-paper pb-28">
+      <div className="menu-shell dining-shell min-h-dvh">
         {!value.isOpen && (
           <p className="bg-ink px-4 py-2 text-center text-[13px] text-paper">
             {value.restaurant.closed_message ??
@@ -107,23 +110,26 @@ export function MenuLayout() {
           </p>
         )}
 
+        <div className="dining-mast">
+          <div className="dining-wrap">
+            <Link to={`/r/${slug}`} className="dining-brand">
+              {value.restaurant.logo_url && <img src={value.restaurant.logo_url} alt="" width="34" height="34" />}
+              {value.restaurant.name}
+            </Link>
+            <Link className="dining-order" to={`/r/${slug}/carrinho`}><MenuIcon name="bag" /> Meu pedido</Link>
+          </div>
+        </div>
         <Outlet />
 
-        <footer className="mt-16 bg-ink px-4 py-10 text-center text-paper">
-          <span className="mx-auto mb-4 block h-px w-10 ember-rule" aria-hidden />
-          <p className="font-display text-xl">{value.restaurant.name}</p>
-          {value.restaurant.address && (
-            <p className="mx-auto mt-2 max-w-sm text-[13px] text-paper/55">{value.restaurant.address}</p>
-          )}
-          <p className="mt-5 text-[11px] uppercase tracking-[0.12em] text-paper/35">
-            Cardápio com realidade aumentada por{' '}
-            <Link to="/" className="underline underline-offset-2">
-              AR Menu
-            </Link>
-          </p>
+        <footer className="dining-footer">
+          <div className="dining-wrap">
+            <div><strong>{value.restaurant.name}</strong>
+              {value.restaurant.address && <p>{value.restaurant.address}</p>}
+            </div>
+            <Link to="/">AR Menu</Link>
+          </div>
         </footer>
-
-        <CartBar />
+        {!productRoute && <CartBar />}
       </div>
     </MenuContext.Provider>
   );

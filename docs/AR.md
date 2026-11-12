@@ -115,29 +115,24 @@ do Google estarem instalados — e uma parcela grande dos aparelhos não os tem.
 produto promete que basta escanear o QR Code, então não pode terminar em "vá à
 loja e instale um aplicativo".
 
-Ele usa apenas o que qualquer navegador oferece: `getUserMedia` para a imagem da
-câmera, `deviceorientation` para ajudar a mirar antes do posicionamento e WebGL
-para desenhar o prato por cima. Depois do toque, a câmera virtual congela para
-eliminar a deriva: um dedo orbita o modelo e a pinça aproxima ou afasta.
+O vídeo de `getUserMedia` fica sob o modelo WebGL. As leituras de orientação
+continuam depois do toque. Um worker analisa quadros reduzidos e procura o
+cartão do mesmo restaurante. A pose usa os quatro cantos do quadrado preto de
+50 mm e o campo de visão estimado. O cartão precisa ficar deitado e visível.
 
 Em WebXR, o ponto de apoio e a câmera usam o mesmo espaço métrico. A interface
 mostra a diferença vertical e a distância em linha reta até o ponto visado ou
 posicionado. Leituras sem rastreamento e superfícies muito inclinadas são descartadas.
 No Quick Look, o visualizador da Apple controla a colocação.
 
-Na câmera comum, a distância é uma estimativa. O cliente pode informar a altura
-ou apoiar uma régua na mesa e tocar nas marcas de 0 e 10 cm mantendo a câmera
-paralela ao tampo. O sistema ajusta a altura pela razão entre o comprimento
-conhecido e o comprimento projetado. A distância exibida se refere ao instante
-do toque. Sem calibração, a projeção parte de 38 cm de altura. O cálculo parte
-de 66° no eixo maior do vídeo e considera o recorte da prévia na tela.
-Mudar a altura física do celular exige uma nova calibração.
-
-**O que ele não faz:** rastrear translação física. Sem SLAM, o navegador não sabe
-que o aparelho se deslocou. Em vez de fingir essa capacidade e deixar o prato
-derivar, o fallback mantém a composição fixa na tela e oferece órbita/zoom por
-gestos. É também a razão de este caminho ficar *abaixo* do WebXR e do Quick Look
-na ordem: onde há rastreamento de verdade, usamos rastreamento de verdade.
+Sem cartão, o toque seleciona detalhes do tampo. Pelo menos cinco regiões
+precisam concordar sobre o movimento na imagem para que o prato acompanhe
+pequenos deslocamentos. Inclinação acentuada, reflexo ou pouca textura podem
+interromper o acompanhamento. Ao perder uma referência adquirida, o prato some
+até a recuperação ou um novo posicionamento. A régua de 10 cm e a altura manual
+permitem estimar distâncias nessa modalidade. A altura inicial de 38 cm serve
+apenas à prévia. O campo de visão inicial é de 66° no eixo maior do vídeo e o
+cálculo considera o recorte aplicado por `object-fit: cover`.
 
 ### Falha recuperável não desce um degrau
 
@@ -182,9 +177,8 @@ idle
  → error             qualquer etapa acima, com mensagem e saída
 ```
 
-**O modelo é carregado antes de pedir a câmera.** A ordem inversa levaria o
-cliente a conceder acesso à câmera e só então descobrir que o arquivo não baixa —
-a pior sequência possível para ele.
+O WebXR solicita a sessão no toque para preservar a ativação exigida pelo
+navegador. Na câmera comum, o modelo é preparado antes de abrir o vídeo.
 
 ### Limpeza
 
@@ -400,8 +394,8 @@ Nenhum deles deixa a tela vazia. Todos mantêm o botão de adicionar ao pedido.
 ## Privacidade
 
 - A câmera é solicitada **apenas** quando o cliente toca em iniciar a AR.
-- Nenhum quadro da câmera é lido, gravado ou enviado ao servidor. A sessão XR
-  compõe a imagem no próprio aparelho.
+- A câmera comum processa os quadros em memória no próprio aparelho. O worker
+  termina ao fechar a experiência. Os quadros não são armazenados ou transmitidos.
 - A sessão encerra ao sair da tela, o que desliga o hardware.
 - Os eventos de analytics guardam nome do evento, produto e um identificador
   anônimo de sessão que vive no `sessionStorage` e some quando a aba fecha.

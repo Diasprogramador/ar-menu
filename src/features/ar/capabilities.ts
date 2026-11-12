@@ -12,11 +12,9 @@
  *   2. Quick Look          — iOS/Safari. O sistema abre o visualizador nativo a
  *                            partir de um arquivo USDZ, com rastreamento
  *                            completo. Exige `usdz_url` no produto.
- *   3. Câmera + controle manual — universal: funciona em qualquer navegador com
- *                            HTTPS, câmera e WebGL, sem instalar nada. Depois
- *                            de posicionado, o prato fica estável na tela e o
- *                            usuário gira/aproxima por gestos. Não acompanha
- *                            deslocamento físico sem SLAM.
+ *   3. Câmera no navegador — WebGL sobre o vídeo. Usa o QR métrico ou detalhes
+ *                            visíveis do tampo para acompanhar movimento, com
+ *                            orientação e controles manuais quando disponíveis.
  *   4. Visualizador 3D     — quando não há câmera ou a permissão foi negada.
  *                            Mantém rotação, zoom limitado, dimensões e o botão
  *                            de adicionar ao pedido.
@@ -54,11 +52,11 @@ type NavigatorWithXR = Navigator & {
 function hasWebGL(): boolean {
   try {
     const canvas = document.createElement('canvas');
-    return Boolean(
-      canvas.getContext('webgl2') ??
-        canvas.getContext('webgl') ??
-        canvas.getContext('experimental-webgl'),
-    );
+    // The installed Three.js renderer requires WebGL2. Release the probe's
+    // context before opening the real viewer on memory-constrained phones.
+    const gl = canvas.getContext('webgl2');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(gl);
   } catch {
     return false;
   }
@@ -167,7 +165,7 @@ export function resolveARMode(
   product: { hasModel: boolean; hasUsdz: boolean; arEnabled: boolean },
 ): ARMode {
   if (!product.hasModel || !product.arEnabled) return 'none';
-  if (capabilities.immersiveAR) return 'webxr';
+  if (capabilities.immersiveAR && capabilities.webgl) return 'webxr';
   if (capabilities.quickLook && product.hasUsdz) return 'quick-look';
   if (capabilities.camera && capabilities.secureContext && capabilities.webgl) return 'camera';
   if (capabilities.webgl) return 'viewer-3d';

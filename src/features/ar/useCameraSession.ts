@@ -4,7 +4,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 import { applyPinch, clamp, scalePercentage, type PhysicalDimensions, type ScaleCalibration } from './scale';
 import { calculateManualOrbit } from './manualOrbit';
-import { cameraVerticalFov, heightFromReference, tableDistance } from './tableDistance';
+import { trackMarker } from './trackMarker';
+import { cameraVerticalFov, DEFAULT_FOCAL_RATIO, heightFromReference, tableDistance } from './tableDistance';
 import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } from '@/features/models3d/modelLoader';
 
 /**
@@ -22,11 +23,9 @@ import { loadGltf, ModelLoadError, prepareModel, type ModelPlacementConfig } fro
  *
  * O que ele entrega e o que não entrega, dito com clareza:
  *
- *   entrega   posicionamento visual estável, rotação manual em 360° e zoom por
- *             pinça em qualquer navegador com câmera e WebGL;
- *   não       rastreamento físico de translação. Depois do posicionamento a
- *             câmera virtual congela para impedir deriva. Andar com o aparelho
- *             move apenas o vídeo ao fundo; WebXR/Quick Look cuidam do 6DoF.
+ *   O QR métrico define um referencial sobre a mesa para estimar posição e
+ *   rotação pela imagem. Sem o marcador, os sensores acompanham a orientação
+ *   disponível e a altura vem da régua ou do ajuste manual.
  *
  * Por isso ele fica abaixo do WebXR e do Quick Look na ordem de preferência:
  * onde existe rastreamento de verdade, usamos rastreamento de verdade.
@@ -60,6 +59,7 @@ type UseCameraSessionOptions = {
 const ALTURA_PADRAO_CM = 38;
 const ALTURA_MINIMA_CM = 15;
 const ALTURA_MAXIMA_CM = 120;
+const MARKER_GRACE_MS = 950;
 
 const eixoZ = new THREE.Vector3(0, 0, 1);
 const euler = new THREE.Euler();
@@ -97,6 +97,8 @@ export function useCameraSession({
   const [heightKnown, setHeightKnown] = useState(false);
   const [referenceHint, setReferenceHint] = useState<string | null>(null);
   const reference = useRef<{ first: THREE.Vector3 | null } | null>(null);
+  const [tracking, setTracking] = useState<'manual' | 'sensor' | 'marker' | 'lost' | 'texture' | 'texture-lost'>('manual');
+  const generation = useRef(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -111,6 +113,11 @@ export function useCameraSession({
     stream: MediaStream;
     alturaMetros: number;
     colocado: boolean;
+    markerSeenAt: number;
+    markerDisabled: boolean;
+    surfaceSeenAt: number;
+    surfaceDepth: number;
+    vision?: ReturnType<typeof trackMarker>;
     escalaRelativa: number;
     limpezas: (() => void)[];
     frameId: number;
@@ -122,6 +129,7 @@ export function useCameraSession({
   }, [onEvent]);
 
   const teardown = useCallback(() => {
+    generation.current++;
     const atual = runtime.current;
     if (!atual) return;
     runtime.current = null;
@@ -156,6 +164,8 @@ export function useCameraSession({
     const atual = runtime.current;
     if (!atual) return;
     atual.colocado = false;
+    atual.surfaceSeenAt = 0;
+    atual.vision?.setAnchor(null);
     reference.current = null;
     setReferenceHint(null);
     setDistance(null);
@@ -182,19 +192,39 @@ export function useCameraSession({
     if (!atual) return;
     const newHeight = limitado / 100;
     // Conserva o pixel escolhido ao recalibrar a profundidade sobre o raio.
-    atual.modelo.position.multiplyScalar(newHeight / atual.alturaMetros);
+    const ratio = newHeight / atual.alturaMetros;
+    atual.modelo.position.multiplyScalar(ratio);
+    atual.camera.position.multiplyScalar(ratio);
+    atual.surfaceDepth *= ratio;
     atual.alturaMetros = newHeight;
     if (atual.colocado) setDistance(tableDistance(atual.camera.position, atual.modelo.position));
     atual.marcador.position.y = -atual.alturaMetros;
   }, []);
 
-  const calibrateReference = useCallback(() => {
+  const switchToManual = useCallback(() => {
+    const current = runtime.current;
+    if (!current) return;
+    current.markerSeenAt = 0;
+    current.markerDisabled = true;
+    current.camera.position.set(0, 0, 0);
+    current.camera.rotation.set(-Math.PI / 6, 0, 0);
+    setHeightKnown(false);
+    setTracking('manual');
     reposicionar();
-    reference.current = { first: null };
-    setReferenceHint('Mantenha o celular paralelo à mesa. Toque no zero de uma régua apoiada nela.');
   }, [reposicionar]);
 
+  const calibrateReference = useCallback(() => {
+    switchToManual();
+    reference.current = { first: null };
+    setReferenceHint('Mantenha o celular paralelo à mesa. Toque no zero de uma régua apoiada nela.');
+  }, [switchToManual]);
+
   const start = useCallback(async () => {
+    teardown();
+    const ticket = generation.current;
+    setTracking('manual');
+    setHeightKnown(false);
+    setScalePercent(100);
     setError(null);
     reference.current = null;
     setReferenceHint(null);
@@ -212,15 +242,22 @@ export function useCameraSession({
       return;
     }
 
+    // Safari requires the sensor permission call in the original tap handler.
+    const orientation = window.DeviceOrientationEvent as (typeof DeviceOrientationEvent & {
+      requestPermission?: () => Promise<PermissionState>;
+    }) | undefined;
+    void orientation?.requestPermission?.().catch(() => undefined);
     // Modelo primeiro: pedir a câmera e só então descobrir que o arquivo não
     // carrega seria a pior ordem possível para o cliente.
     setStatus('loading-model');
     let preparado;
     try {
       const carregado = await loadGltf(modelUrl, { onProgress: setProgress });
+      if (ticket !== generation.current) return;
       preparado = prepareModel(carregado, dimensions, placement);
       setCalibration(preparado.calibration);
     } catch (falha) {
+      if (ticket !== generation.current) return;
       setError({
         kind: 'model',
         message:
@@ -247,6 +284,7 @@ export function useCameraSession({
         audio: false,
       });
     } catch (falha) {
+      if (ticket !== generation.current) return;
       const negado =
         falha instanceof DOMException &&
         (falha.name === 'NotAllowedError' || falha.name === 'SecurityError');
@@ -268,6 +306,10 @@ export function useCameraSession({
       return;
     }
 
+    if (ticket !== generation.current) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
     const video = videoRef.current;
     const host = canvasHostRef.current;
     if (!video || !host) {
@@ -280,10 +322,22 @@ export function useCameraSession({
 
     video.srcObject = stream;
     video.setAttribute('playsinline', 'true');
-    await video.play().catch(() => undefined);
-
-    // ---- cena ----
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      await video.play();
+      if (ticket !== generation.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      stream.getTracks().forEach(track => track.stop());
+      if (ticket !== generation.current) return;
+      setError({ kind: 'camera', message: 'O navegador interrompeu a câmera. Tente abrir o cardápio diretamente no navegador.' });
+      setStatus('error');
+      emit.current?.('failed', 'camera');
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -298,8 +352,9 @@ export function useCameraSession({
     // O campo de visão vertical vem do horizontal e da proporção da tela: é o
     // que faz um prato de 12 cm ocupar na tela os pixels que ocuparia de fato.
     const proporcao = window.innerWidth / window.innerHeight;
+    let focalRatio = DEFAULT_FOCAL_RATIO;
     const fovVertical = () => cameraVerticalFov(video.videoWidth || window.innerWidth,
-      video.videoHeight || window.innerHeight, window.innerWidth, window.innerHeight);
+      video.videoHeight || window.innerHeight, window.innerWidth, window.innerHeight, focalRatio);
     const camera = new THREE.PerspectiveCamera(
       fovVertical(),
       proporcao,
@@ -318,7 +373,9 @@ export function useCameraSession({
     // `RoomEnvironment` é gerado em memória: dá reflexo PBR crível sem baixar
     // um HDRI e sem custo de rede no meio da experiência.
     const pmrem = new THREE.PMREMGenerator(renderer);
-    const ambiente = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    const room = new RoomEnvironment();
+    const ambiente = pmrem.fromScene(room, 0.04);
+    room.dispose();
     scene.environment = ambiente.texture;
     scene.environmentIntensity = 0.38;
 
@@ -328,6 +385,11 @@ export function useCameraSession({
     sol.castShadow = true;
     sol.shadow.mapSize.set(1024, 1024);
     scene.add(sol);
+    scene.add(sol.target);
+    sol.shadow.camera.left = sol.shadow.camera.bottom = -0.35;
+    sol.shadow.camera.right = sol.shadow.camera.top = 0.35;
+    sol.shadow.camera.updateProjectionMatrix();
+    sol.shadow.normalBias = 0.0006;
 
     const alturaMetros = alturaCm / 100;
 
@@ -364,6 +426,12 @@ export function useCameraSession({
     limpezas.push(() => {
       ambiente.dispose();
       pmrem.dispose();
+      marcador.geometry.dispose();
+      marcador.material.dispose();
+      sombra.geometry.dispose();
+      sombra.material.dispose();
+      sol.shadow.dispose();
+      video.srcObject = null;
     });
 
     runtime.current = {
@@ -376,49 +444,105 @@ export function useCameraSession({
       stream,
       alturaMetros,
       colocado: false,
+      markerSeenAt: 0,
+      markerDisabled: false,
+      surfaceSeenAt: 0,
+      surfaceDepth: 0,
       escalaRelativa: 1,
       limpezas,
       frameId: 0,
     };
 
-    // ---- orientação do aparelho ----
-    // No iOS a permissão de sensor é pedida à parte, e só dentro de um gesto.
-    type OrientacaoComPermissao = typeof DeviceOrientationEvent & {
-      requestPermission?: () => Promise<PermissionState>;
-    };
-    const OrientacaoEvento = window.DeviceOrientationEvent as OrientacaoComPermissao | undefined;
-
-    if (OrientacaoEvento?.requestPermission) {
-      try {
-        await OrientacaoEvento.requestPermission();
-      } catch {
-        // Sem sensor o prato ainda aparece; apenas não acompanha o giro
-      }
-    }
-
+    let sensorEstablished = false;
+    const measuredOrientation = new THREE.Quaternion();
+    const yawCorrection = new THREE.Quaternion();
     const aoGirar = (evento: DeviceOrientationEvent) => {
       const atual = runtime.current;
-      if (!atual || evento.alpha === null || evento.beta === null || evento.gamma === null) return;
+      if (!atual || atual.markerSeenAt || reference.current || evento.beta === null || evento.gamma === null) return;
 
       const giroDaTela = THREE.MathUtils.degToRad(
-        (screen.orientation?.angle ?? 0) as number,
+        screen.orientation?.angle ?? (window as Window & {orientation?: number}).orientation ?? 0,
       );
-      // Antes do posicionamento, o sensor ajuda a mirar o plano. Depois dele,
-      // congelamos a câmera virtual. Sem posição 6DoF, continuar aplicando o
-      // giroscópio faria o prato derivar apesar de estar "ancorado".
-      if (!atual.colocado) {
-        aplicarOrientacao(
-          atual.camera.quaternion,
-          THREE.MathUtils.degToRad(evento.alpha),
-          THREE.MathUtils.degToRad(evento.beta),
-          THREE.MathUtils.degToRad(evento.gamma),
-          giroDaTela,
-        );
+      aplicarOrientacao(
+        measuredOrientation,
+        THREE.MathUtils.degToRad(evento.alpha ?? 0),
+        THREE.MathUtils.degToRad(evento.beta),
+        THREE.MathUtils.degToRad(evento.gamma),
+        giroDaTela,
+      );
+      if (!sensorEstablished) {
+        // The first compass sample may arrive after the customer has placed the dish.
+        const heading = new THREE.Euler().setFromQuaternion(measuredOrientation, 'YXZ').y;
+        yawCorrection.setFromAxisAngle(new THREE.Vector3(0,1,0), -heading);
+        sensorEstablished = true;
       }
+      atual.camera.quaternion.copy(yawCorrection).multiply(measuredOrientation);
+      if (!atual.surfaceSeenAt) setTracking('sensor');
     };
 
     window.addEventListener('deviceorientation', aoGirar, true);
     limpezas.push(() => window.removeEventListener('deviceorientation', aoGirar, true));
+    let lastAcquisition = 0;
+    let lastMeasurement = 0;
+    const vision = trackMarker(video, pose => {
+      const current = runtime.current;
+      if (!current || current.markerDisabled || reference.current) return;
+      const now = performance.now();
+      // Confirm a new acquisition with a second decode before switching frames.
+      const fresh = now - lastAcquisition < 1400 && lastAcquisition > 0;
+      lastAcquisition = now;
+      if (!fresh) return;
+      const first = !current.markerSeenAt;
+      const relocalized = now - current.markerSeenAt > MARKER_GRACE_MS;
+      current.markerSeenAt = now;
+      if (focalRatio !== pose.focalRatio) {
+        focalRatio = pose.focalRatio;
+        current.camera.fov = fovVertical();
+        current.camera.updateProjectionMatrix();
+      }
+      pose.position.y -= current.alturaMetros;
+      const gain = first || relocalized ? 1 : 0.8;
+      current.camera.position.lerp(pose.position, gain);
+      current.camera.quaternion.slerp(pose.rotation, gain);
+      if (first) {
+        current.vision?.setAnchor(null);
+        current.surfaceSeenAt = 0;
+        current.modelo.position.set(0, -current.alturaMetros, 0);
+        current.modelo.rotation.set(0, 0, 0);
+      }
+      current.modelo.visible = current.colocado;
+      setTracking('marker');
+      setHeightKnown(true);
+      if (now - lastMeasurement > 240 || first) {
+        const target = current.colocado ? current.modelo.position : new THREE.Vector3(0, -current.alturaMetros, 0);
+        setDistance(tableDistance(current.camera.position, target));
+        lastMeasurement = now;
+      }
+    }, (motion, width, height) => {
+      const current = runtime.current;
+      if (!current?.colocado || current.markerSeenAt || !current.surfaceDepth) return;
+      const f = Math.max(width,height) * focalRatio;
+      const depth = current.surfaceDepth / motion.scale;
+      // Follow the observed table detail in the real frame. Use the sensor for
+      // tilt when available and the relative image scale for short translations.
+      const offset = new THREE.Vector3((motion.x-.5)*width/f, (.5-motion.y)*height/f, -1)
+        .multiplyScalar(depth).applyQuaternion(current.camera.quaternion);
+      const position = current.modelo.position.clone().sub(offset);
+      if (position.y <= -current.alturaMetros+.04) return;
+      current.camera.position.copy(position);
+      current.surfaceSeenAt = performance.now();
+      current.modelo.visible = true;
+      setTracking('texture');
+      if (current.surfaceSeenAt - lastMeasurement > 240) {
+        setDistance(tableDistance(position,current.modelo.position));
+        lastMeasurement = current.surfaceSeenAt;
+      }
+    }, brightness => {
+      const exposure = .57 + brightness * .45;
+      renderer.toneMappingExposure += .12 * (exposure - renderer.toneMappingExposure);
+    });
+    runtime.current.vision = vision;
+    limpezas.push(vision.stop);
 
     const aoRedimensionar = () => {
       const atual = runtime.current;
@@ -515,7 +639,7 @@ export function useCameraSession({
           viewportWidth: window.innerWidth,
           viewportHeight: window.innerHeight,
         });
-        atual.modelo.rotation.set(orbit.pitch, orbit.yaw, 0);
+        atual.modelo.rotation.set(atual.markerSeenAt || atual.surfaceSeenAt ? 0 : orbit.pitch, orbit.yaw, 0);
       } else if (ponteiros.size === 2 && distanciaInicial > 0) {
         arrastou = true;
         const gesto = distanciaEntre() / distanciaInicial;
@@ -543,6 +667,7 @@ export function useCameraSession({
 
       const atual = runtime.current;
       if (!atual || arrastou || !eraUnico) return;
+      if (atual.markerSeenAt && performance.now() - atual.markerSeenAt > MARKER_GRACE_MS) return;
 
       // Toque sem arrasto: posiciona ou reposiciona o prato
       if (reference.current) {
@@ -570,6 +695,16 @@ export function useCameraSession({
       }
 
       atual.modelo.position.set(ponto.x, -atual.alturaMetros, ponto.z);
+      if (!atual.markerSeenAt && video.videoWidth > 0 && video.videoHeight > 0) {
+        const rect = video.getBoundingClientRect();
+        const cover = Math.max(rect.width/video.videoWidth, rect.height/video.videoHeight);
+        const x = .5 + (evento.clientX-rect.left-rect.width/2)/(video.videoWidth*cover);
+        const y = .5 + (evento.clientY-rect.top-rect.height/2)/(video.videoHeight*cover);
+        atual.surfaceDepth = -atual.camera.worldToLocal(ponto.clone()).z;
+        atual.surfaceSeenAt = 0;
+        setTracking(sensorEstablished ? 'sensor' : 'manual');
+        vision.setAnchor({x,y});
+      }
       atual.modelo.visible = true;
       setReferenceHint(null);
       setDistance(tableDistance(atual.camera.position, ponto));
@@ -614,8 +749,20 @@ export function useCameraSession({
       const atual = runtime.current;
       if (!atual) return;
       atual.frameId = requestAnimationFrame(desenhar);
+      const lost = atual.markerSeenAt > 0 && performance.now() - atual.markerSeenAt > MARKER_GRACE_MS;
+      if (lost) {
+        atual.modelo.visible = false;
+        setTracking('lost');
+        setDistance(null);
+      } else if (atual.surfaceSeenAt && performance.now() - atual.surfaceSeenAt > 650) {
+        atual.modelo.visible = false;
+        setTracking('texture-lost');
+        setDistance(null);
+      }
 
-      if (!atual.colocado) {
+      if (lost) {
+        atual.marcador.visible = false;
+      } else if (!atual.colocado) {
         // O retículo acompanha o centro da tela enquanto o cliente procura o lugar
         const centro = projetarNoPlano(window.innerWidth / 2, window.innerHeight / 2);
         if (centro) {
@@ -632,6 +779,8 @@ export function useCameraSession({
         atual.modelo.position.z + 0.5,
       );
       sombra.position.set(atual.modelo.position.x, -atual.alturaMetros, atual.modelo.position.z);
+      sombra.visible = atual.modelo.visible;
+      sol.target.position.copy(sombra.position);
 
       atual.renderer.render(atual.scene, atual.camera);
     };
@@ -639,7 +788,7 @@ export function useCameraSession({
 
     setStatus('scanning');
     emit.current?.('ready');
-  }, [modelUrl, dimensions, placement, alturaCm, ajustarAltura]);
+  }, [modelUrl, dimensions, placement, alturaCm, ajustarAltura, teardown]);
 
   return {
     status,
@@ -649,6 +798,8 @@ export function useCameraSession({
     scalePercent,
     alturaCm,
     heightKnown,
+    tracking,
+    switchToManual,
     distance,
     referenceHint,
     calibrateReference,
